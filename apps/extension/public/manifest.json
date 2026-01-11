@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "LinguoLand",
+  "version": "0.2.9",
+  "description": "Your personalized language learning assistant.",
+  "permissions": ["storage", "activeTab", "contextMenus"],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "http://www.xxih.cc/*",
+    "https://www.xxih.cc/*",
+    "http://api.linguoland.com/*",
+    "https://api.linguoland.com/*",
+    "http://api.linguoland.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.js"],
+      "all_frames": true,
+      "match_about_blank": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content-ui.js"],
+      "all_frames": true,
+      "match_about_blank": true
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "logo.png",
+      "48": "logo.png",
+      "128": "logo.png"
+    }
+  },
+  "icons": {
+    "16": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["dictionary.json", "assets/tailwind-styles.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

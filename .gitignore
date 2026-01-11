@@ -1,0 +1,50 @@
+# dependencies
+**/node_modules
+
+# testing
+**/coverage
+
+# build
+**/dist
+**/build
+**/dist-zip
+chrome-extension/manifest.js
+chrome-extension/pre-build.tsconfig.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# env
+**/.env.*
+**/.env
+
+# etc
+.DS_Store
+.idea
+**/.turbo
+
+# compiled
+**/tailwind-output.css
+.specstory
+.repomix
+
+
+# START Ruler Generated Files
+/.amazonq/mcp.json
+/.amazonq/mcp.json.bak
+/.amazonq/rules/ruler_q_rules.md
+/.amazonq/rules/ruler_q_rules.md.bak
+/.clinerules
+/.clinerules.bak
+/.cursor/rules/ruler_cursor_instructions.mdc
+/.cursor/rules/ruler_cursor_instructions.mdc.bak
+/AGENTS.md
+/AGENTS.md.bak
+/CLAUDE.md
+/CLAUDE.md.bak
+# END Ruler Generated Files
+.aone_copilot/
+
+*.jsonl
+dist.zip
+
+
+archived/

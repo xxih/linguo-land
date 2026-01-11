@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+  <!-- 模拟文本段落 -->
+  <g stroke="#ecd6afff">
+    <path d="M3 6h14"/>
+    <path d="M3 9h12"/>
+    <path d="M3 12h14"/>
+    <path d="M3 15h10"/>
+  </g>
+
+  <!-- 魔法指针 -->
+  <g stroke="#f6e4c4ff">
+    <!-- 指针主体：标准箭头形 -->
+    <path d="M14 8l5 10-3-2-2 3z"/>
+    <!-- <path d="M14 8l-5 3"/> -->
+  </g>
+</svg>

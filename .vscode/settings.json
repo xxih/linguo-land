@@ -1,0 +1,25 @@
+{
+  "cSpell.words": [
+    "Avenir",
+    "curtime",
+    "edly",
+    "lemmatization",
+    "Lemmatizer",
+    "lemmatizing",
+    "Neue",
+    "rescan",
+    "rescanning",
+    "Segoe",
+    "wardly",
+    "Youdao"
+  ],
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/bower_components": true,
+    "**/*.code-search": true,
+    "**/archived/**": true,
+    "**/.specstory/**": true,
+    "**/.spec/**": true,
+    "**/.repomix/**": true
+  }
+}

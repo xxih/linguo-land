@@ -1,0 +1,8 @@
+{
+  "label": "词汇库管理",
+  "position": 3,
+  "link": {
+    "type": "generated-index",
+    "description": "了解如何管理你的个人词汇库，包括查看列表、导入/导出数据以及调整扩展设置。"
+  }
+}

@@ -1,0 +1,163 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------- 用户认证模型 -------------------
+
+// 用户表
+model User {
+  id               Int                  @id @default(autoincrement())
+  email            String               @unique
+  password         String               // 存储哈希后的密码
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  // 关联到用户状态
+  familyStatuses   UserFamilyStatus[]
+
+  @@map("users")
+}
+
+// ------------------- 词族管理模型 -------------------
+
+// 1. 词族表：定义一个词族的"根"
+model WordFamily {
+  id         Int                  @id @default(autoincrement())
+  rootWord   String               @unique // 词族的代表词，例如 "invade", "settle"
+  words      Word[]               // 这个词族包含的所有单词
+  userStatus UserFamilyStatus[]   // 关联用户对这个词族的状态
+  tags       Tag[]                // 多对多关系：这个词族关联的标签
+
+  createdAt  DateTime             @default(now())
+
+  @@map("word_families")
+}
+
+// 2. 单词表：存储每个具体的单词及其所属的词族
+model Word {
+  id        Int        @id @default(autoincrement())
+  text      String     @unique // 单词本身，例如 "invading", "settlement"
+  family    WordFamily @relation(fields: [familyId], references: [id])
+  familyId  Int
+
+  @@index([familyId])
+  @@map("words")
+}
+
+// 3. 用户状态表：存储用户对某个"词族"的掌握状态
+model UserFamilyStatus {
+  id               Int                     @id @default(autoincrement())
+
+  // 关联到 User 模型
+  user             User                    @relation(fields: [userId], references: [id])
+  userId           Int                     // 外键
+
+  family           WordFamily              @relation(fields: [familyId], references: [id])
+  familyId         Int
+  status           WordFamiliarityStatus   @default(KNOWN) // 预设词库默认是认识的
+  familiarityLevel Int                     @default(7) @db.SmallInt // 0-7，熟练度等级
+  lookupCount      Int                     @default(0) // 查词次数（显示wordCard的次数）
+  lastSeenAt       DateTime?
+  importSource     String?                 // 词汇来源：如 "preset:cet4"、"preset:cet6"、null表示手动添加
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@unique([userId, familyId]) // 关键：唯一约束是用户和词族ID
+  @@index([userId])
+  @@index([userId, importSource])
+  @@map("user_family_status")
+}
+
+// 4. 标签表：定义一个标签，如 "CET4", "TOEFL"
+model Tag {
+  id           Int          @id @default(autoincrement())
+  key          String       @unique // 唯一的键，如 "cet4", "toefl"
+  name         String       // 显示的名称，如 "四级", "托福"
+  description  String?      // 标签描述
+  wordFamilies WordFamily[] // 这个标签关联的所有词族 (多对多关系)
+
+  createdAt    DateTime     @default(now())
+
+  @@map("tags")
+}
+
+// ------------------- 保留旧表用于迁移（可选）-------------------
+
+// 旧的用户词汇表 - 迁移后可以删除
+model UserVocabulary {
+  id               Int                     @id @default(autoincrement())
+  userId           String                  @default("default")
+  word             String
+  status           WordFamiliarityStatus   @default(UNKNOWN)
+  familiarityLevel Int                     @default(0) @db.SmallInt
+  lookupCount      Int                     @default(0) // 查词次数（显示wordCard的次数）
+  lastSeenAt       DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  importSource     String?
+
+  @@unique([userId, word])
+  @@index([userId, importSource])
+  @@map("user_vocabulary")
+}
+
+enum WordFamiliarityStatus {
+  UNKNOWN
+  LEARNING
+  KNOWN
+}
+
+// ------------------- 词典数据模型 -------------------
+
+model DictionaryEntry {
+  id        Int      @id @default(autoincrement())
+  word      String   @unique // 单词原文，建立索引以快速查找
+  phonetics String[] // 存储音标数组
+  audio     String[] // 存储音频链接数组
+  forms     String[] // 存储单词的其他形式
+
+  entries   DefinitionEntry[] // 关联到多个词性定义
+
+  // 用于存储简化的中文释义，JSON 类型非常适合这种半结构化数据
+  // 这也为你未来的多语言支持提供了极好的可扩展性
+  chineseEntriesShort Json? @db.JsonB
+
+  createdAt DateTime @default(now())
+
+  @@map("dictionary_entries")
+}
+
+model DefinitionEntry {
+  id   Int    @id @default(autoincrement())
+  pos  String // Part of Speech (e.g., "noun", "verb")
+
+  entry             DictionaryEntry @relation(fields: [dictionaryEntryId], references: [id], onDelete: Cascade)
+  dictionaryEntryId Int
+
+  senses Sense[] // 关联到多个义项
+
+  @@map("definition_entries")
+}
+
+model Sense {
+  id       Int      @id @default(autoincrement())
+  glosses  String[] // 义项解释数组
+  examples String[] // 例句数组
+
+  definition         DefinitionEntry @relation(fields: [definitionEntryId], references: [id], onDelete: Cascade)
+  definitionEntryId  Int
+
+  @@map("senses")
+}

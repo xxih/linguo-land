@@ -1,0 +1,17 @@
+# 忽略所有 svg 文件
+*.svg
+
+# 忽略指定目录
+.turbo/
+dist/
+.repomix/
+.specstory/
+generated/
+
+# 词典
+dictionary.json
+apps/server/src/data/
+apps/extension/public/word_groups_final_refined—25.json
+.specify/
+.cursor/
+archived/

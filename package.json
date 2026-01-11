@@ -1,0 +1,29 @@
+{
+  "name": "LinguoLand",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "build:dev": "turbo run build:dev",
+    "repomix": "repomix",
+    "dev:docs": "turbo run dev --filter=docs",
+    "build:docs": "turbo run build --filter=docs",
+    "build:extension": "turbo run build:release --filter=extension",
+    "version:extension": "cd apps/extension && npm run version:bump",
+    "format": "prettier --write ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.15.1",
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "repomix": "^1.6.0",
+    "turbo": "^2.5.6"
+  },
+  "dependencies": {
+    "wink-lemmatizer": "^3.0.4"
+  }
+}

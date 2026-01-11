@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Seamless Language Learner",
+  "version": "0.1.0",
+  "description": "Your personalized language learning assistant.",
+  "permissions": [
+    "storage", // 本地存储
+    "activeTab", // 访问当前激活的标签页
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*", // 开发时允许访问本地后端
+    "https://api.dictionaryapi.dev/*", // FreeDictionary API
+    "https://openapi.youdao.com/*", // 有道词典API
+    // "https://your-api.com/*" // 部署后
+  ],
+  "background": {
+    "service_worker": "src/background.ts",
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"], // 在所有页面运行
+      "js": ["src/content.ts"],
+    },
+  ],
+  "action": {
+    "default_popup": "index.html",
+  },
+}
