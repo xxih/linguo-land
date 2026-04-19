@@ -29,6 +29,9 @@ tsconfig.tsbuildinfo
 
 .aone_copilot/
 
+# Claude Code local overrides (personal, not shared)
+.claude/settings.local.json
+
 *.jsonl
 dist.zip
 

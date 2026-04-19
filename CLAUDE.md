@@ -25,6 +25,32 @@ pnpm workspaces + Turbo 的 monorepo：
 
 **扩展（apps/extension）里的日志必须使用 `apps/extension/src/utils/logger.ts` 中的 logger**，不要直接 `console.log` / `console.error`。
 
+## Spec-driven 开发
+
+本仓库用 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 做 spec-driven 开发。规范都落在 `openspec/` 目录：
+
+- `openspec/specs/<capability>/spec.md` — 每个 capability 的**当前基线** spec（用户可见行为 / API contract）
+- `openspec/changes/<change-name>/` — 一次 change proposal，`archive` 后合并回 specs
+- `openspec/changes/archive/` — 已归档的历史 change
+
+### 工作流
+
+动一个 capability 时，用 slash commands：
+
+- `/opsx:propose "描述"` — 创建 change proposal，AI 写 delta（ADDED / MODIFIED / REMOVED）
+- `/opsx:apply` — 把 change 翻译成代码改动
+- `/opsx:archive` — change 归档，delta 合并进主 spec
+
+### brownfield 注意
+
+项目是边开发边补 spec 的 brownfield 状态：**第一次碰到某个 capability 时，把「当前真实行为 + 本次新增」全部写成 `ADDED`**（因为还没有 source spec 可 MODIFY）。archive 后这块才有基线，下次才能走 MODIFIED/REMOVED。
+
+**不要**一次性逆向生成全部 specs —— 官方反对这种做法，会产生大量无人读的"文档化实现细节"。用到哪补哪。
+
+### 配套文件
+
+- `.claude/commands/opsx/` 和 `.claude/skills/openspec-*/` 由 `openspec init` 生成，**不要手改**。需要升级时跑 `pnpm exec openspec update`。
+
 ## 运维 / 部署
 
 线上部署、发布、回滚、服务器布局、DB 位置、SSL 证书等信息 → **见 `docs/operations.md`**。
