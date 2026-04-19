@@ -1,0 +1,88 @@
+name: Deploy Server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/server/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'scripts/deploy/**'
+      - '.github/workflows/deploy-server.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ARTIFACT_DIR: deploy-artifact
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate prisma client
+        working-directory: apps/server
+        run: pnpm exec prisma generate
+
+      - name: Build server
+        run: pnpm turbo run build --filter=server
+
+      - name: Create deployable bundle
+        run: |
+          pnpm --filter=server deploy --prod "$ARTIFACT_DIR"
+          cp -r apps/server/dist "$ARTIFACT_DIR/"
+          cp -r apps/server/prisma "$ARTIFACT_DIR/"
+          if [ -d apps/server/generated ]; then
+            cp -r apps/server/generated "$ARTIFACT_DIR/"
+          fi
+          du -sh "$ARTIFACT_DIR"
+
+      - name: Compute release id
+        id: release
+        run: echo "id=$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Upload release
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          RELEASE_ID: ${{ steps.release.outputs.id }}
+        run: |
+          SSH="ssh -i ~/.ssh/deploy -o UserKnownHostsFile=~/.ssh/known_hosts"
+          $SSH "$SSH_USER@$SSH_HOST" "mkdir -p /var/www/linguo-land-server/releases/$RELEASE_ID /var/www/linguo-land-server/shared/bin"
+          rsync -az --delete -e "$SSH" "$ARTIFACT_DIR/" "$SSH_USER@$SSH_HOST:/var/www/linguo-land-server/releases/$RELEASE_ID/"
+          rsync -az -e "$SSH" scripts/deploy/ "$SSH_USER@$SSH_HOST:/var/www/linguo-land-server/shared/bin/"
+          $SSH "$SSH_USER@$SSH_HOST" "chmod +x /var/www/linguo-land-server/shared/bin/*.sh"
+
+      - name: Activate release
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          RELEASE_ID: ${{ steps.release.outputs.id }}
+        run: |
+          ssh -i ~/.ssh/deploy -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "$SSH_USER@$SSH_HOST" \
+            "/var/www/linguo-land-server/shared/bin/activate.sh $RELEASE_ID"
