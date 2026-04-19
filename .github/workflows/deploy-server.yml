@@ -46,7 +46,7 @@ jobs:
 
       - name: Create deployable bundle
         run: |
-          pnpm --filter=server deploy --prod "$ARTIFACT_DIR"
+          pnpm --filter=server --legacy deploy --prod "$ARTIFACT_DIR"
           cp -r apps/server/dist "$ARTIFACT_DIR/"
           cp -r apps/server/prisma "$ARTIFACT_DIR/"
           if [ -d apps/server/generated ]; then
