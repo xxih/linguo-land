@@ -58,6 +58,11 @@
   - 位置：`src/entrypoints/content.ts`、`src/entrypoints/background.ts`
   - 改进方向：~~逐步把核心逻辑收敛到 entrypoints 下~~
 
-- ~~**核心算法测试覆盖不足**~~ ✅ 落地：textProcessor.test.ts 修复了过时的 splitCamelCase 期望（"技术术语不拆"）+ 新增 lemmaCache 缓存命中测试；新增 highlightManager.test.ts 覆盖 `updateWordStatus(familyRoot)` 整族匹配。caretRangeFromPoint 路径 jsdom 不支持，留待真实浏览器 e2e 覆盖。
+- ~~**核心算法测试覆盖不足**~~ ✅ 落地：textProcessor.test.ts 修复了过时的 splitCamelCase 期望（"技术术语不拆"）+ 新增 lemmaCache 缓存命中测试；新增 highlightManager.test.ts 覆盖 `updateWordStatus(familyRoot)` 整族匹配。caretRangeFromPoint 路径 jsdom 不支持，留待真实浏览器 e2e 覆盖。词形还原 ground truth 回归集见 [ADR 0017](adr/0017-lemma-rule-based-with-server-exceptions.md)（UniMorph 抽样 215 条，100% 通过）。
+
+- ~~**词形还原对不规则比较级 / 双辅音 -ed / 部分不规则 PP 整片漏**~~ ✅ 落地于 [ADR 0017](adr/0017-lemma-rule-based-with-server-exceptions.md)
+  - 位置：`apps/extension/src/content/utils/textProcessor.ts: getLemmasForWord`
+  - 改造前 UniMorph 抽样回归集 75.3% 通过；改造后 100%（215/215）
+  - 改造方式：vendor wink-lexicon 的不规则形态 exception 表到后端，client 端 `getLemmasForWord` 重写成"查表 + 后缀剥除规则 + 字典验证"的多候选 pipeline。compromise 不再参与词级别 lemma 推断。
 
 - ~~**`debugUtils` 等临时代码遗留在生产路径**~~ ✅ 落地于 commit 把内存监控 + 快捷键 + banner 收进 `import.meta.env.MODE === 'development'` 分支，prod 构建会被 Vite tree-shake；处理状态 mutex + 超时看门狗 + 全局错误兜底保留（属 service-level safety net）。
