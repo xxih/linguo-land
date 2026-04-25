@@ -1,27 +1,11 @@
-// apps/extension/vite.config.ts
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { resolve } from 'path';
-import tailwindcss from '@tailwindcss/vite';
+import { defineExtensionConfig } from './vite.config.factory';
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, './src'),
-    },
-  },
-  build: {
-    rollupOptions: {
-      input: {
-        'content-ui': resolve(__dirname, 'src/content-ui/main.tsx'),
-      },
-      output: {
-        format: 'iife',
-        entryFileNames: `src/[name].js`,
-        chunkFileNames: `chunks/[name].js`,
-        assetFileNames: `assets/[name].[ext]`,
-      },
-    },
+// First step in the build chain — emptyOutDir cleans dist/ before any other config writes to it.
+export default defineExtensionConfig({
+  mode: 'build',
+  emptyOutDir: true,
+  format: 'iife',
+  input: {
+    'content-ui': 'src/content-ui/main.tsx',
   },
 });

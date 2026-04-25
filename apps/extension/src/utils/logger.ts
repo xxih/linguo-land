@@ -41,7 +41,8 @@ export class Logger {
   }
 
   private log(level: LogLevel, message: string, context: Record<string, any> = {}): void {
-    if (!isDevelopment) {
+    // Silence noisy levels in production; always emit WARN/ERROR so real signals reach DevTools.
+    if (!isDevelopment && (level === 'DEBUG' || level === 'INFO')) {
       return;
     }
     const logEntry = {

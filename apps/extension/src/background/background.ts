@@ -4,6 +4,22 @@ import { Logger } from '../utils/logger';
 
 const logger = new Logger('BackgroundScript');
 
+self.addEventListener('error', (event) => {
+  logger.error(
+    'Uncaught error in service worker',
+    event.error instanceof Error ? event.error : new Error(event.message),
+    { filename: event.filename, line: event.lineno, col: event.colno },
+  );
+});
+
+self.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  logger.error(
+    'Unhandled promise rejection in service worker',
+    reason instanceof Error ? reason : new Error(String(reason)),
+  );
+});
+
 logger.info('Background script loaded', { version: 'v3' });
 
 // 初始化消息处理器
