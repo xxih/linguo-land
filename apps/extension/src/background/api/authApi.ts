@@ -34,6 +34,36 @@ export interface RefreshTokenRequest {
 }
 
 /**
+ * 把 fetch Response 解析成 JSON；body 为空或非 JSON 时抛带 HTTP 状态的友好错误，
+ * 而不是把原始 "Unexpected end of JSON input" 暴露给用户。
+ */
+async function readJsonOrThrow<T>(response: Response, fallbackMessage: string): Promise<T> {
+  const text = await response.text();
+  let parsed: any = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // 非 JSON：例如 nginx 的 502 HTML、连接被中间层截断
+      if (!response.ok) {
+        throw new Error(`${fallbackMessage}（HTTP ${response.status}）`);
+      }
+      throw new Error(`${fallbackMessage}：服务器返回非 JSON 响应（HTTP ${response.status}）`);
+    }
+  }
+
+  if (!response.ok) {
+    const message = parsed?.message ?? `${fallbackMessage}（HTTP ${response.status}）`;
+    throw new Error(Array.isArray(message) ? message.join('；') : message);
+  }
+
+  if (parsed === null) {
+    throw new Error(`${fallbackMessage}：服务器返回了空响应`);
+  }
+  return parsed as T;
+}
+
+/**
  * 用户注册
  */
 export async function register(data: RegisterRequest): Promise<AuthResponse> {
@@ -46,12 +76,7 @@ export async function register(data: RegisterRequest): Promise<AuthResponse> {
     body: JSON.stringify(data),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || '注册失败');
-  }
-
-  return response.json();
+  return readJsonOrThrow<AuthResponse>(response, '注册失败');
 }
 
 /**
@@ -67,12 +92,7 @@ export async function login(data: LoginRequest): Promise<AuthResponse> {
     body: JSON.stringify(data),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || '登录失败');
-  }
-
-  const result = await response.json();
+  const result = await readJsonOrThrow<AuthResponse>(response, '登录失败');
 
   // 保存令牌到 chrome.storage
   await chrome.storage?.local.set({
