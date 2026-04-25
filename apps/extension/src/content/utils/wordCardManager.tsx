@@ -221,26 +221,25 @@ export class WordCardManager {
       onRemove: (root) => root?.unmount(),
     });
 
-    Object.assign(toastUi.shadowHost.style, {
-      position: 'fixed',
-      top: '0',
-      right: '0',
-      zIndex: '49',
-      pointerEvents: 'none',
-    });
+    // 同样要带 !important，否则会被 WXT 默认的 :host{all:initial!important} 重置成 static
+    toastUi.shadowHost.style.setProperty('position', 'fixed', 'important');
+    toastUi.shadowHost.style.setProperty('top', '0', 'important');
+    toastUi.shadowHost.style.setProperty('right', '0', 'important');
+    toastUi.shadowHost.style.setProperty('z-index', '49', 'important');
+    toastUi.shadowHost.style.setProperty('pointer-events', 'none', 'important');
 
     toastUi.mount();
   }
 
   private applyHostStyles(host: HTMLElement, x: number, y: number): void {
-    Object.assign(host.style, {
-      position: 'absolute',
-      visibility: 'hidden',
-      left: `${x}px`,
-      top: `${y}px`,
-      zIndex: '999998',
-      pointerEvents: 'auto',
-    });
+    // 必须用 !important——WXT 默认在 shadow root 里注入 `:host { all: initial !important }`
+    // 重置规则，普通 inline style 会被它压掉，导致 position 退回 static、host 错位到文档底部。
+    host.style.setProperty('position', 'absolute', 'important');
+    host.style.setProperty('visibility', 'hidden', 'important');
+    host.style.setProperty('left', `${x}px`, 'important');
+    host.style.setProperty('top', `${y}px`, 'important');
+    host.style.setProperty('z-index', '999998', 'important');
+    host.style.setProperty('pointer-events', 'auto', 'important');
   }
 
   private scheduleRepositionAndShow(host: HTMLElement, x: number, y: number): void {
@@ -249,9 +248,9 @@ export class WordCardManager {
         const rect = host.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
           const pos = this.calculatePosition(x, y, rect.width, rect.height);
-          host.style.left = `${pos.left}px`;
-          host.style.top = `${pos.top}px`;
-          host.style.visibility = 'visible';
+          host.style.setProperty('left', `${pos.left}px`, 'important');
+          host.style.setProperty('top', `${pos.top}px`, 'important');
+          host.style.setProperty('visibility', 'visible', 'important');
           this.setupResizeObserver(host);
           return;
         }
@@ -260,10 +259,10 @@ export class WordCardManager {
           const newRect = host.getBoundingClientRect();
           if (newRect.width > 0 && newRect.height > 0) {
             const finalPos = this.calculatePosition(x, y, newRect.width, newRect.height);
-            host.style.left = `${finalPos.left}px`;
-            host.style.top = `${finalPos.top}px`;
+            host.style.setProperty('left', `${finalPos.left}px`, 'important');
+            host.style.setProperty('top', `${finalPos.top}px`, 'important');
           }
-          host.style.visibility = 'visible';
+          host.style.setProperty('visibility', 'visible', 'important');
           this.setupResizeObserver(host);
         }, 200);
       });
@@ -331,8 +330,8 @@ export class WordCardManager {
         rect.width,
         rect.height,
       );
-      host.style.left = `${pos.left}px`;
-      host.style.top = `${pos.top}px`;
+      host.style.setProperty('left', `${pos.left}px`, 'important');
+      host.style.setProperty('top', `${pos.top}px`, 'important');
     });
 
     this.resizeObserver.observe(host);
