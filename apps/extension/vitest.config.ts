@@ -1,4 +1,8 @@
 import { defineConfig } from 'vitest/config';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const ROOT = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   test: {
@@ -8,7 +12,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      'shared-types': '../../../packages/shared-types',
+      '@': resolve(ROOT, './src'),
+      'shared-types': resolve(ROOT, '../../packages/shared-types'),
     },
   },
 });
