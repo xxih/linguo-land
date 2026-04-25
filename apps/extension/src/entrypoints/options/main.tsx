@@ -1,8 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import Options from './Options';
-import { ErrorBoundary } from '../lib/ErrorBoundary';
-import '../index.css';
+import Options from '@/options/Options';
+import { ErrorBoundary } from '@/lib/ErrorBoundary';
+import '@/index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

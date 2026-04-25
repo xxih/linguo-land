@@ -1,0 +1,42 @@
+import { defineConfig } from 'wxt';
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  srcDir: 'src',
+  outDir: 'dist',
+  vite: () => ({
+    plugins: [react(), tailwindcss()],
+  }),
+  manifest: {
+    name: 'LinguoLand',
+    description: 'Your personalized language learning assistant.',
+    permissions: ['storage', 'activeTab', 'contextMenus'],
+    host_permissions: [
+      'http://localhost:3000/*',
+      'http://www.xxih.cc/*',
+      'https://www.xxih.cc/*',
+      'http://api.linguoland.com/*',
+      'https://api.linguoland.com/*',
+    ],
+    web_accessible_resources: [
+      {
+        resources: ['dictionary.json', 'word_groups_final_refined—25.json'],
+        matches: ['<all_urls>'],
+      },
+    ],
+    icons: {
+      '16': 'logo.png',
+      '48': 'logo.png',
+      '128': 'logo.png',
+    },
+    action: {
+      default_title: 'LinguoLand',
+      default_icon: {
+        '16': 'logo.png',
+        '48': 'logo.png',
+        '128': 'logo.png',
+      },
+    },
+  },
+});
