@@ -875,7 +875,12 @@ export class MessageHandlers {
   }
 
   /**
-   * 通知content script单词状态更新
+   * 通知content script单词状态更新。
+   *
+   * 关键：从镜像里取 familyRoot 一起广播。chrome.tabs.sendMessage(tabId, ...) 在 MV3 下
+   * 会派发到 tab 内所有 frame，每个 frame（含 iframe）的 onMessage 都触发；接收侧用
+   * familyRoot 在自己 registry 里整族匹配，避免"main 改 running、iframe 高亮的 ran 不变"
+   * 这种跨 frame 不一致。
    */
   private notifyContentScriptUpdate(
     sender: chrome.runtime.MessageSender,
@@ -883,36 +888,40 @@ export class MessageHandlers {
     status: WordFamiliarityStatus,
     familiarityLevel?: number,
   ): void {
-    if (sender.tab?.id) {
-      chrome.tabs
-        .sendMessage(sender.tab.id, {
-          type: 'WORD_STATUS_UPDATED',
-          word: word,
-          status: status,
-          familiarityLevel: familiarityLevel,
-        })
-        .catch((error) => {
-          // 忽略发送失败的错误（页面可能已经关闭）
-          this.logger.debug('Failed to notify content script', error as Error);
-        });
-    }
+    if (!sender.tab?.id) return;
+
+    const hit = this.mirror.query([word])[word];
+    chrome.tabs
+      .sendMessage(sender.tab.id, {
+        type: 'WORD_STATUS_UPDATED',
+        word: word,
+        status: status,
+        familiarityLevel: familiarityLevel,
+        familyRoot: hit?.familyRoot ?? word,
+      })
+      .catch((error) => {
+        // 忽略发送失败的错误（页面可能已经关闭）
+        this.logger.debug('Failed to notify content script', error as Error);
+      });
   }
 
   /**
-   * 通知content script单词已被忽略
+   * 通知content script单词已被忽略。同样带上 familyRoot 供 iframe 按词族清理。
    */
   private notifyContentScriptWordIgnored(sender: chrome.runtime.MessageSender, word: string): void {
-    if (sender.tab?.id) {
-      chrome.tabs
-        .sendMessage(sender.tab.id, {
-          type: 'WORD_IGNORED',
-          word: word,
-        })
-        .catch((error) => {
-          // 忽略发送失败的错误（页面可能已经关闭）
-          this.logger.debug('Failed to notify content script about ignored word', error as Error);
-        });
-    }
+    if (!sender.tab?.id) return;
+
+    const hit = this.mirror.query([word])[word];
+    chrome.tabs
+      .sendMessage(sender.tab.id, {
+        type: 'WORD_IGNORED',
+        word: word,
+        familyRoot: hit?.familyRoot ?? word,
+      })
+      .catch((error) => {
+        // 忽略发送失败的错误（页面可能已经关闭）
+        this.logger.debug('Failed to notify content script about ignored word', error as Error);
+      });
   }
 
   /**

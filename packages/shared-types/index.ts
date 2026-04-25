@@ -126,6 +126,7 @@ export interface ChromeMessage {
   translation?: string; // 翻译内容
   sentenceAnalysis?: string; // 句子分析
   paragraph?: string; // 段落（原文）
+  familyRoot?: string; // WORD_STATUS_UPDATED / WORD_IGNORED 跨 frame 广播时携带，让 iframe 能按词族整体更新而不只匹配字面 word
 }
 
 /** 词典白名单响应（背景脚本 → 内容脚本） */

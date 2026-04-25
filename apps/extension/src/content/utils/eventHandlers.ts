@@ -54,20 +54,21 @@ export class EventHandlers {
   ): boolean {
     if (message.type === 'WORD_STATUS_UPDATED') {
       logger.info(
-        `收到词元状态更新消息: ${message.word} -> ${message.status}, 熟练度: ${message.familiarityLevel}`,
+        `收到词元状态更新消息: ${message.word} -> ${message.status}, 熟练度: ${message.familiarityLevel}, familyRoot: ${message.familyRoot}`,
       );
 
-      // 先尝试常规更新
+      // background 广播带 familyRoot——跨 frame 时按词族整族匹配，
+      // iframe 高亮的"ran"也能跟着主页面"running"一起切到 known
       this.highlightManager.updateWordStatus(
         message.word,
         message.status,
         message.familiarityLevel,
+        message.familyRoot,
       );
 
       // 如果单词未在注册表中找到，尝试动态创建高亮
       // 这在用户点击回退路径的单词（如known状态）并改变其状态时特别有用
       if (message.status === 'learning' || message.status === 'unknown') {
-        // 搜索页面上是否有匹配的文本并尝试动态添加高亮
         this.tryAddDynamicHighlight(
           message.word,
           message.status,

@@ -36,7 +36,7 @@
   - 位置：`src/content/content.ts`（`extractTextNodes(document.body)`）
   - 改进方向：以 Text 节点为 key 缓存 `{textHash → tokens}`，MutationObserver 增量只处理 diff 节点。
 
-- **iframe 各自为战，无跨 frame 协调**
+- ~~**iframe 各自为战，无跨 frame 协调**~~ ✅ 落地于 [ADR 0011](adr/0011-dictionary-whitelist-server-source.md) + [ADR 0015](adr/0015-cross-frame-status-sync-via-family-root.md)
   - 位置：`src/entrypoints/content.ts:8`（`allFrames: true`）
   - 现状：每个 iframe 独立加载词典 + 独立查询 + 独立维护高亮；主页面"标记已掌握"事件不会同步到 iframe。
   - 改进方向：background 当总线，把"词状态变更"事件广播到所有 frame 的 content script。

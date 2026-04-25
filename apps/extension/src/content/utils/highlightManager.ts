@@ -559,15 +559,26 @@ export class HighlightManager {
   }
 
   /**
-   * 更新词元高亮状态
+   * 更新词元高亮状态。
+   *
+   * 优先按 familyRoot 匹配——跨 frame 广播来的消息会带 familyRoot，
+   * 这样 iframe 上"running"被改成 known 时，本地高亮的"ran/runs/ran"
+   * （都属同一 family root "run"）也能整族跟着更新。fallback 走 lemma includes
+   * 兼容老调用方（如未带 familyRoot 的本地直接调用）。
    */
-  updateWordStatus(lemma: string, newStatus: string, newFamiliarityLevel?: number): void {
+  updateWordStatus(
+    lemma: string,
+    newStatus: string,
+    newFamiliarityLevel?: number,
+    familyRoot?: string,
+  ): void {
     this.logger.info(
-      `🔄 更新词元高亮状态: ${lemma} -> ${newStatus}, 熟练度: ${newFamiliarityLevel}`,
+      `🔄 更新词元高亮状态: ${lemma} -> ${newStatus}, 熟练度: ${newFamiliarityLevel}, familyRoot=${familyRoot ?? '(无)'}`,
     );
 
-    // 找到所有匹配的高亮项（按词元匹配）
-    const matchingItems = this.registry.items.filter((item) => item.lemmas.includes(lemma));
+    const matchingItems = this.registry.items.filter((item) =>
+      familyRoot ? item.familyRoot === familyRoot : item.lemmas.includes(lemma),
+    );
 
     if (matchingItems.length === 0) {
       this.logger.info(`❌ 未找到词元 "${lemma}" 的高亮项，状态更新将不会应用到视觉高亮`);
