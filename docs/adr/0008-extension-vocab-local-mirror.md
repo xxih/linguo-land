@@ -26,7 +26,7 @@
 
 - 新增 `apps/extension/src/background/vocabularyMirror.ts`：单例，内存 `byLemma: Map<string, WordFamilyInfo>` + `byFamily: Map<string, VocabularySyncFamily>`，持久化到 `chrome.storage.local` 的 `vocabularyMirror` key。
   - `init()`：从 storage 还原 → 同步触发一次远端 sync 兜底（不阻塞）。service worker 重启后立刻可查询。
-  - `query(lemmas)` 纯本地查询，大小写不敏感。镜像里没有的 lemma 不返回（保持与原 `/vocabulary/query` 行为一致——未返回即视为 unknown）。
+  - `query(lemmas)` 纯本地查询，大小写不敏感。**所有传入的 lemma 都会返回**——命中镜像 → 返回该 family 的真实状态；未命中 → 返回默认 `{ status: 'unknown', familyRoot: lemma 自身, familiarityLevel: 0 }`，让 content script 把它当作生词高亮（红色）。这和原 `/vocabulary/query` 行为对齐——后端对每个传入的 lemma 都会返回 entry，只是默认状态是 unknown。
   - `applyFamily(family)` / `applyFamily(null, removedRoot)` 写后回填。
   - `clear()` 登出时调用。
 - `messageHandlers.handleQueryWordsStatus` 改成同步、纯本地查询；`handleUpdateWordStatus` / `BATCH_UPDATE` / `AUTO_INCREASE_FAMILIARITY` 写完都把 mutation 响应回填到镜像。

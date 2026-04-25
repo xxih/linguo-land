@@ -74,22 +74,25 @@ describe('VocabularyMirror', () => {
     });
   });
 
-  it('未知 lemma 不返回（保持与原 /vocabulary/query 行为一致）', async () => {
+  it('未命中的 lemma 返回默认 unknown（让生词路径继续走高亮）', async () => {
     const mirror = VocabularyMirror.getInstance();
     await mirror.applyFamily(runFamily);
 
-    expect(mirror.query(['xenophobia', 'undiscovered'])).toEqual({});
+    expect(mirror.query(['xenophobia'])).toEqual({
+      xenophobia: { status: 'unknown', familyRoot: 'xenophobia', familiarityLevel: 0 },
+    });
   });
 
-  it('removedFamilyRoot 把整个词族（含所有 lemma）从镜像清掉', async () => {
+  it('removedFamilyRoot 后该词族的 lemma 退回 unknown，其他词族不受影响', async () => {
     const mirror = VocabularyMirror.getInstance();
     await mirror.applyFamily(runFamily);
     await mirror.applyFamily(eatFamily);
 
     await mirror.applyFamily(null, 'run');
 
-    expect(mirror.query(['running', 'ran'])).toEqual({});
-    // 同时未删的另一个词族不受影响
+    expect(mirror.query(['running'])).toEqual({
+      running: { status: 'unknown', familyRoot: 'running', familiarityLevel: 0 },
+    });
     expect(mirror.query(['eating'])).toEqual({
       eating: { status: 'learning', familyRoot: 'eat', familiarityLevel: 3 },
     });
@@ -106,7 +109,10 @@ describe('VocabularyMirror', () => {
     };
     await mirror.applyFamily(trimmed);
 
-    expect(mirror.query(['ran'])).toEqual({}); // 不再属于该词族
+    // ran 不再属于该词族 → 退回默认 unknown
+    expect(mirror.query(['ran'])).toEqual({
+      ran: { status: 'unknown', familyRoot: 'ran', familiarityLevel: 0 },
+    });
     expect(mirror.query(['running'])).toEqual({
       running: { status: 'known', familyRoot: 'run', familiarityLevel: 7 },
     });
@@ -142,7 +148,10 @@ describe('VocabularyMirror', () => {
 
     await mirror.clear();
 
-    expect(mirror.query(['running'])).toEqual({});
+    // clear 后所有 lemma 都退回默认 unknown
+    expect(mirror.query(['running'])).toEqual({
+      running: { status: 'unknown', familyRoot: 'running', familiarityLevel: 0 },
+    });
     expect(mirror.getStats()).toEqual({ familyCount: 0, lemmaCount: 0, syncedAt: null });
     expect(storageStore.vocabularyMirror).toBeUndefined();
   });
