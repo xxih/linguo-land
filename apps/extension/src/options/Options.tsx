@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { LoginPage } from '../popup/LoginPage';
-import { isAuthenticated, logout, getCurrentUser } from '../background/api/authApi';
 import { fetchWithAuth, fetchJsonWithAuth } from '../background/api/fetchWithAuth';
 import { getApiBaseUrl } from '../background/api/apiConfig';
 import { Logger } from '../utils/logger';
@@ -52,63 +51,22 @@ import {
   BookOpen,
 } from 'lucide-react';
 
-interface VocabularyFamily {
-  familyRoot: string;
-  wordCount: number;
-  status: 'unknown' | 'learning' | 'known';
-  familiarityLevel: number;
-  lookupCount: number;
-  lastSeenAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface PresetList {
-  key: string;
-  name: string;
-  description: string;
-}
-
-interface VocabularyListResponse {
-  families: VocabularyFamily[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
-interface VocabularyStats {
-  unknown: number;
-  learning: number;
-  known: number;
-  total: number;
-  recentFamilies: Array<{
-    familyRoot: string;
-    lastSeenAt: string;
-    lookupCount: number;
-  }>;
-}
-
-interface SettingsData {
-  enabledSites: string[];
-  disabledSites: string[];
-  aiMode: 'auto' | 'manual' | 'off';
-  autoIncreaseFamiliarity: boolean; // 新增：自动提升熟练度开关
-  showFamiliarityInCard: boolean; // 新增：是否在卡片中展示熟练度
-  enhancedPhraseDetection: boolean; // 新增：AI增强词组检测开关
-  sentenceAnalysisMode: 'always' | 'smart' | 'off'; // 新增：长难句分析模式（始终开启、智能判断、始终关闭）
-  extensionEnabled: boolean; // 新增：全局功能开关
-  highlightEnabled: boolean; // 新增：高亮功能开关
-}
+import type {
+  VocabularyFamily,
+  PresetList,
+  VocabularyListResponse,
+  VocabularyStats,
+  SettingsData,
+  ActiveTab,
+} from './types';
+import { formatDate } from './utils/formatDate';
+import { useUrlState } from './hooks/useUrlState';
+import { useAuth } from './hooks/useAuth';
 
 const logger = new Logger('Options');
 
 export default function Options() {
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
-  const [currentUser, setCurrentUser] = useState<{
-    id: number;
-    email: string;
-  } | null>(null);
+  const { isLoggedIn, currentUser, handleLoginSuccess, handleLogout: hookLogout } = useAuth();
   const [vocabularyData, setVocabularyData] = useState<VocabularyListResponse | null>(null);
   const [stats, setStats] = useState<VocabularyStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -132,67 +90,18 @@ export default function Options() {
   const [familyWordsCache, setFamilyWordsCache] = useState<Record<string, string[]>>({});
   const [loadingFamily, setLoadingFamily] = useState<string | null>(null);
 
-  // 分页和过滤参数 - 使用自定义 URL 状态管理
-  const getUrlParams = useCallback(() => {
-    const params = new URLSearchParams(window.location.search);
-    return {
-      tab: params.get('tab') || 'overview',
-      page: params.get('page') || '1',
-      pageSize: params.get('pageSize') || '20',
-      sortBy: params.get('sortBy') || 'lastSeenAt',
-      sortOrder: params.get('sortOrder') || 'desc',
-      status: params.get('status') || 'learning',
-      importSource: params.get('importSource') || 'all',
-      search: params.get('search') || '',
-    };
-  }, []);
-
-  const [urlParams, setUrlParams] = useState(getUrlParams);
-
-  // 更新URL参数
-  const setUrlState = useCallback(
-    (updates: Partial<typeof urlParams>) => {
-      const newParams = { ...urlParams, ...updates };
-      const params = new URLSearchParams();
-      Object.entries(newParams).forEach(([key, value]) => {
-        if (value) params.set(key, value);
-      });
-      const newUrl = `${window.location.pathname}?${params.toString()}`;
-      window.history.replaceState({}, '', newUrl);
-      setUrlParams(newParams);
-    },
-    [urlParams],
-  );
-
-  // 监听浏览器前进后退
-  useEffect(() => {
-    const handlePopState = () => {
-      setUrlParams(getUrlParams());
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [getUrlParams]);
-
-  // 从 URL 参数中解析出实际使用的值
-  const currentPage = parseInt(urlParams.page || '1', 10);
-  const pageSize = parseInt(urlParams.pageSize || '20', 10);
-  const sortBy =
-    (urlParams.sortBy as 'familyRoot' | 'status' | 'lastSeenAt' | 'lookupCount' | 'createdAt') ||
-    'lastSeenAt';
-  const sortOrder = (urlParams.sortOrder as 'asc' | 'desc') || 'desc';
-  const statusFilter = (urlParams.status as 'all' | 'unknown' | 'learning' | 'known') || 'learning';
-  const importSourceFilter = (urlParams.importSource as 'all' | 'manual' | 'preset') || 'all';
-  const searchTerm = urlParams.search || '';
-
-  // activeTab 从 URL 参数中同步
-  const activeTab =
-    (urlParams.tab as
-      | 'overview'
-      | 'vocabulary-list'
-      | 'vocabulary-ignored'
-      | 'vocabulary-import'
-      | 'features'
-      | 'article-analysis') || 'overview';
+  const {
+    setUrlState,
+    handleTabChange,
+    currentPage,
+    pageSize,
+    sortBy,
+    sortOrder,
+    statusFilter,
+    importSourceFilter,
+    searchTerm,
+    activeTab,
+  } = useUrlState();
 
   const [presetLists, setPresetLists] = useState<PresetList[]>([]);
 
@@ -216,48 +125,8 @@ export default function Options() {
   const [exportFormat, setExportFormat] = useState<'json' | 'txt' | 'json-array'>('json');
   const [exportStatusFilter, setExportStatusFilter] = useState<'all' | 'learning' | 'known'>('all');
 
-  // 更新 URL 参数（包括tab）
-  const updateUrlTab = useCallback(
-    (tab: string) => {
-      setUrlState({ tab });
-    },
-    [setUrlState],
-  );
-
-  // 切换 tab 并更新 URL
-  const handleTabChange = (
-    tab:
-      | 'overview'
-      | 'vocabulary-list'
-      | 'vocabulary-ignored'
-      | 'vocabulary-import'
-      | 'features'
-      | 'article-analysis',
-  ) => {
-    updateUrlTab(tab);
-  };
-
-  useEffect(() => {
-    checkLoginStatus();
-  }, []);
-
-  const checkLoginStatus = async () => {
-    const loggedIn = await isAuthenticated();
-    setIsLoggedIn(loggedIn);
-    if (loggedIn) {
-      const user = await getCurrentUser();
-      setCurrentUser(user);
-    }
-  };
-
-  const handleLoginSuccess = async () => {
-    await checkLoginStatus();
-  };
-
   const handleLogout = async () => {
-    await logout();
-    setIsLoggedIn(false);
-    setCurrentUser(null);
+    await hookLogout();
     setVocabularyData(null);
   };
 
@@ -320,22 +189,6 @@ export default function Options() {
       logger.error('Failed to load stats', error as Error);
     } finally {
       setStatsLoading(false);
-    }
-  };
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-
-    if (diffHours < 1) {
-      return '刚刚';
-    } else if (diffHours < 24) {
-      return `${Math.floor(diffHours)} 小时前`;
-    } else {
-      const days = Math.floor(diffHours / 24);
-      return days === 0 ? '今天' : `${days} 天前`;
     }
   };
 
