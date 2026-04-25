@@ -5,6 +5,12 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   srcDir: 'src',
   outDir: 'dist',
+  // WXT 默认 dev server 监听 3000，与本地 NestJS 后端冲突，错位到 3010 让 popup 能正常打到 :3000 的 API
+  dev: {
+    server: {
+      port: 3010,
+    },
+  },
   vite: () => ({
     plugins: [react(), tailwindcss()],
   }),
