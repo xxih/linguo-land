@@ -87,84 +87,62 @@ export class VocabularyService {
     userId: number,
     familiarityLevel?: number,
   ): Promise<void> {
-    // 1. 找到词元所属的词族
-    const wordInfo = await this.prisma.word.findUnique({
-      where: { text: lemma },
-      select: { familyId: true, family: { select: { rootWord: true } } },
-    });
-
-    if (!wordInfo) {
-      console.warn(`无法更新单词 "${lemma}" 的状态，因为它不属于任何词族。`);
-      return;
-    }
-
-    const { familyId } = wordInfo;
-
-    // 特殊处理：标记为"陌生"实际上是从词库中删除
-    if (status === 'unknown') {
-      console.log(`标记词族 "${wordInfo.family.rootWord}" (词元: "${lemma}") 为陌生，从词库中删除`);
-      await this.prisma.userFamilyStatus.deleteMany({
-        where: {
-          userId,
-          familyId,
-        },
-      });
-      return;
-    }
-
-    // 如果只更新熟练度（不改变状态）
-    if (status === null && familiarityLevel !== undefined) {
-      const existing = await this.prisma.userFamilyStatus.findUnique({
-        where: { userId_familyId: { userId, familyId } },
+    await this.prisma.$transaction(async (tx) => {
+      const wordInfo = await tx.word.findUnique({
+        where: { text: lemma },
+        select: { familyId: true, family: { select: { rootWord: true } } },
       });
 
-      if (existing) {
-        await this.prisma.userFamilyStatus.update({
-          where: { userId_familyId: { userId, familyId } },
-          data: {
-            familiarityLevel,
-            updatedAt: new Date(),
-          },
-        });
+      if (!wordInfo) {
+        console.warn(`无法更新单词 "${lemma}" 的状态，因为它不属于任何词族。`);
+        return;
+      }
+
+      const { familyId } = wordInfo;
+
+      // "unknown" 表示从词库中移除该词族
+      if (status === 'unknown') {
+        await tx.userFamilyStatus.deleteMany({ where: { userId, familyId } });
         console.log(
-          `[UPDATE] 已更新词族 "${wordInfo.family.rootWord}" (词元: "${lemma}") 熟练度为 ${familiarityLevel}`,
+          `[UPDATE] 词族 "${wordInfo.family.rootWord}" (词元: "${lemma}") 已从词库移除`,
         );
+        return;
       }
-      return;
-    }
 
-    // 将前端状态转换为Prisma状态
-    const prismaStatus = status ? this.mapStatusToPrismaStatus(status) : undefined;
-
-    // 根据状态设置默认熟练度等级
-    let finalFamiliarityLevel = familiarityLevel;
-    if (finalFamiliarityLevel === undefined && status) {
-      switch (status) {
-        case 'learning':
-          finalFamiliarityLevel = 1;
-          break;
-        case 'known':
-          finalFamiliarityLevel = 7;
-          break;
-        default:
-          finalFamiliarityLevel = 0;
+      // 仅更新熟练度（保持状态）
+      if (status === null && familiarityLevel !== undefined) {
+        const updated = await tx.userFamilyStatus.updateMany({
+          where: { userId, familyId },
+          data: { familiarityLevel, updatedAt: new Date() },
+        });
+        if (updated.count > 0) {
+          console.log(
+            `[UPDATE] 已更新词族 "${wordInfo.family.rootWord}" 熟练度为 ${familiarityLevel}`,
+          );
+        }
+        return;
       }
-    }
 
-    // 2. 更新或创建该词族的状态记录
-    if (prismaStatus) {
-      await this.prisma.userFamilyStatus.upsert({
+      const prismaStatus = status ? this.mapStatusToPrismaStatus(status) : undefined;
+      if (!prismaStatus) return;
+
+      let finalFamiliarityLevel = familiarityLevel;
+      if (finalFamiliarityLevel === undefined) {
+        finalFamiliarityLevel = status === 'learning' ? 1 : status === 'known' ? 7 : 0;
+      }
+
+      await tx.userFamilyStatus.upsert({
         where: { userId_familyId: { userId, familyId } },
         update: {
           status: prismaStatus,
-          ...(finalFamiliarityLevel !== undefined && { familiarityLevel: finalFamiliarityLevel }),
+          familiarityLevel: finalFamiliarityLevel,
           updatedAt: new Date(),
         },
         create: {
           userId,
           familyId,
           status: prismaStatus,
-          familiarityLevel: finalFamiliarityLevel ?? 0,
+          familiarityLevel: finalFamiliarityLevel,
           lastSeenAt: new Date(),
         },
       });
@@ -172,7 +150,7 @@ export class VocabularyService {
       console.log(
         `[UPDATE] 已更新词族 "${wordInfo.family.rootWord}" (词元: "${lemma}") 状态为 "${status}"`,
       );
-    }
+    });
   }
 
   /**
@@ -181,102 +159,47 @@ export class VocabularyService {
    * @param userId 用户ID
    */
   async autoIncreaseFamiliarity(lemma: string, userId: number): Promise<void> {
-    console.log('[VocabularyService] ========== 开始自动提升熟练度 ==========');
-    console.log('[VocabularyService] 输入参数 - 词元:', lemma, '用户ID:', userId);
+    await this.prisma.$transaction(async (tx) => {
+      const wordInfo = await tx.word.findUnique({
+        where: { text: lemma },
+        select: { familyId: true, family: { select: { rootWord: true } } },
+      });
 
-    const wordInfo = await this.prisma.word.findUnique({
-      where: { text: lemma },
-      select: { familyId: true, family: { select: { rootWord: true } } },
-    });
+      if (!wordInfo) return;
 
-    console.log('[VocabularyService] 查询词族信息:', wordInfo);
+      const { familyId } = wordInfo;
+      const existing = await tx.userFamilyStatus.findUnique({
+        where: { userId_familyId: { userId, familyId } },
+      });
 
-    if (!wordInfo) {
-      console.log('[VocabularyService] 词元不存在于词族表中，终止处理');
-      return;
-    }
-
-    const { familyId } = wordInfo;
-    console.log('[VocabularyService] 词族ID:', familyId, '词族根:', wordInfo.family.rootWord);
-
-    const existing = await this.prisma.userFamilyStatus.findUnique({
-      where: { userId_familyId: { userId, familyId } },
-    });
-
-    console.log(
-      '[VocabularyService] 查询用户词族状态:',
-      existing
-        ? {
-            status: existing.status,
-            familiarityLevel: existing.familiarityLevel,
-            lookupCount: existing.lookupCount,
-          }
-        : '不存在',
-    );
-
-    if (existing) {
-      // 如果记录已存在
-      console.log('[VocabularyService] 记录已存在，检查状态和熟练度');
-      console.log(
-        '[VocabularyService] 当前状态:',
-        existing.status,
-        '当前熟练度:',
-        existing.familiarityLevel,
-      );
-
-      // 如果是陌生状态，不记录查词次数，直接返回
-      if (existing.status === PrismaWordStatus.UNKNOWN) {
-        console.log('[VocabularyService] 状态为 UNKNOWN，不记录查词次数，直接返回');
-        console.log(`[AUTO] 词族 "${wordInfo.family.rootWord}" 为陌生状态，跳过记录`);
+      // 不在学习列表里的词（含从未加入 + 已标记 unknown）不记录 lookup
+      if (!existing || existing.status === PrismaWordStatus.UNKNOWN) {
         return;
       }
 
-      if (existing.status === PrismaWordStatus.LEARNING && existing.familiarityLevel < 7) {
-        // learning 状态且熟练度未满：提升熟练度并增加查词次数
-        console.log('[VocabularyService] 满足提升条件：learning状态且熟练度<7，准备更新');
-        const updated = await this.prisma.userFamilyStatus.update({
-          where: { userId_familyId: { userId, familyId } },
-          data: {
-            familiarityLevel: existing.familiarityLevel + 1,
-            lookupCount: { increment: 1 },
-            lastSeenAt: new Date(),
-            updatedAt: new Date(),
-          },
-        });
-        console.log('[VocabularyService] 更新成功:', {
-          familiarityLevel: `${existing.familiarityLevel} -> ${updated.familiarityLevel}`,
-          lookupCount: updated.lookupCount,
-        });
+      const shouldRaise =
+        existing.status === PrismaWordStatus.LEARNING && existing.familiarityLevel < 7;
+
+      const updated = await tx.userFamilyStatus.update({
+        where: { userId_familyId: { userId, familyId } },
+        data: {
+          ...(shouldRaise && { familiarityLevel: existing.familiarityLevel + 1 }),
+          lookupCount: { increment: 1 },
+          lastSeenAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+
+      if (shouldRaise) {
         console.log(
-          `[AUTO] 自动提升词族 "${wordInfo.family.rootWord}" 熟练度: ${existing.familiarityLevel} -> ${existing.familiarityLevel + 1}, 查词次数: ${updated.lookupCount}`,
+          `[AUTO] 词族 "${wordInfo.family.rootWord}" 熟练度 ${existing.familiarityLevel} -> ${updated.familiarityLevel}，查词次数 ${updated.lookupCount}`,
         );
       } else {
-        // 其他情况（已达最高熟练度、known状态等）：仅增加查词次数
-        console.log('[VocabularyService] 不满足提升条件，仅增加查词次数');
-        console.log(
-          '[VocabularyService] 原因:',
-          existing.status !== PrismaWordStatus.LEARNING ? '状态不是learning' : '熟练度已达最高',
-        );
-        const updated = await this.prisma.userFamilyStatus.update({
-          where: { userId_familyId: { userId, familyId } },
-          data: {
-            lookupCount: { increment: 1 },
-            lastSeenAt: new Date(),
-            updatedAt: new Date(),
-          },
-        });
-        console.log('[VocabularyService] 更新查词次数成功:', updated.lookupCount);
         console.log(
           `[AUTO] 词族 "${wordInfo.family.rootWord}" 仅增加查词次数: ${updated.lookupCount}`,
         );
       }
-    } else {
-      // 如果记录不存在：不做任何操作（陌生词不记录）
-      console.log('[VocabularyService] 记录不存在，不创建记录（陌生词不记录查词次数）');
-      console.log(`[AUTO] 词族 "${wordInfo.family.rootWord}" 不在学习列表中，跳过记录`);
-    }
-
-    console.log('[VocabularyService] ========== 自动提升熟练度完成 ==========');
+    });
   }
 
   private mapPrismaStatusToStatus(prismaStatus: PrismaWordStatus): WordFamiliarityStatus {
