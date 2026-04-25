@@ -12,43 +12,41 @@ export class TextProcessor {
   private static readonly logger = new Logger('TextProcessor');
 
   /**
-   * 检查元素是否可见
+   * 检查元素是否可见。
+   *
+   * 旧实现对每个祖先调用 `getComputedStyle` + 最后再 `getBoundingClientRect`，
+   * 强制 layout，5000+ 文本节点的页面卡到不可用（backlog P1）。
+   *
+   * 新实现：
+   * - 主路径走 `Element.checkVisibility`（Chrome 105+，原生且不强制 layout）：
+   *   一次性覆盖 display/visibility/opacity/content-visibility 与所有祖先链
+   * - 仅保留产品级启发式：hidden 属性、未聚焦 SELECT 的 OPTION、约定弹层 class、aria-hidden
+   *   ——它们都是 classList / 属性查询，不会触发 layout
+   * - 不再调用 getBoundingClientRect，width/maxWidth==0 这种少见情况让 checkVisibility 兜
    */
   static isElementVisible(element: Element): boolean {
+    if ('checkVisibility' in element) {
+      const visible = (element as HTMLElement).checkVisibility({
+        checkOpacity: true,
+        checkVisibilityCSS: true,
+        contentVisibilityAuto: true,
+      });
+      if (!visible) return false;
+    }
+
     let current: Element | null = element;
-
     while (current && current !== document.body) {
-      const style = window.getComputedStyle(current);
-
-      // 检查常见的隐藏样式
-      if (
-        style.display === 'none' ||
-        style.visibility === 'hidden' ||
-        style.opacity === '0' ||
-        // 很奇怪，不知道为什么，youtube 字幕的 parent 计算高度是 0px，但是实际上是可见的
-        // style.height === '0px' ||
-        style.width === '0px' ||
-        style.maxHeight === '0px' ||
-        style.maxWidth === '0px'
-      ) {
-        return false;
-      }
-
-      // 检查是否有 hidden 属性
       if (current.hasAttribute('hidden')) {
         return false;
       }
 
-      // 检查下拉框等特殊情况
       if (current.tagName === 'OPTION' && current.parentElement) {
         const select = current.parentElement as HTMLSelectElement;
         if (select.tagName === 'SELECT' && !select.matches(':focus')) {
-          this.logger.debug('rejectedNodes 5', current);
           return false;
         }
       }
 
-      // 检查弹出框、菜单等
       if (
         current.classList.contains('dropdown-menu') ||
         current.classList.contains('popover') ||
@@ -62,10 +60,7 @@ export class TextProcessor {
       current = current.parentElement;
     }
 
-    // 检查元素是否有实际的边界框
-    const rect = element.getBoundingClientRect();
-    this.logger.debug('isElementVisible', element);
-    return rect.width > 0 && rect.height > 0;
+    return true;
   }
 
   /**

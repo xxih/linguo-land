@@ -41,7 +41,7 @@
   - 现状：每个 iframe 独立加载词典 + 独立查询 + 独立维护高亮；主页面"标记已掌握"事件不会同步到 iframe。
   - 改进方向：background 当总线，把"词状态变更"事件广播到所有 frame 的 content script。
 
-- **可见性检查 `getBoundingClientRect` 每节点调用**
+- ~~**可见性检查 `getBoundingClientRect` 每节点调用**~~ ✅ 落地于 [ADR 0013](adr/0013-element-checkvisibility.md)
   - 位置：`src/content/utils/textProcessor.ts:17-69,100`
   - 现状：每个 Text 节点都触发重排，大页面卡顿明显。
   - 改进方向：用 `IntersectionObserver` 或先按祖先元素粗筛。
