@@ -64,6 +64,4 @@
   - 位置：仅有 `src/content/utils/textProcessor.test.ts`，高亮逻辑 / 点击命中 / 词形还原回归都没有
   - 改进方向：补词形还原、高亮命中两条核心路径的测试（按全局规则只测核心，不凑数）。
 
-- **`debugUtils` 等临时代码遗留在生产路径**
-  - 位置：`src/content/content.ts:7,62`
-  - 改进方向：清理或下沉到 dev-only 入口。
+- ~~**`debugUtils` 等临时代码遗留在生产路径**~~ ✅ 落地于 commit 把内存监控 + 快捷键 + banner 收进 `import.meta.env.MODE === 'development'` 分支，prod 构建会被 Vite tree-shake；处理状态 mutex + 超时看门狗 + 全局错误兜底保留（属 service-level safety net）。

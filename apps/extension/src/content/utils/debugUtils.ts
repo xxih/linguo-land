@@ -28,14 +28,21 @@ export class DebugUtils {
   }
 
   /**
-   * 初始化调试功能
+   * 初始化调试功能。
+   *
+   * 全局错误兜底 + 处理超时看门狗在 prod 也保留——它们是 service-level safety net，
+   * 不是开发噪音。开发专用的内存监控、调试快捷键、启动横幅只在 dev 模式装载，
+   * Vite 在 prod 构建里会把这分支 tree-shake 掉。
    */
   private initializeDebugFeatures(): void {
     this.setupGlobalErrorHandling();
-    this.setupMemoryMonitoring();
     this.setupProcessingTimeoutCheck();
-    this.setupDebugKeyboardShortcuts();
-    this.logDebugInfo();
+
+    if (import.meta.env.MODE === 'development') {
+      this.setupMemoryMonitoring();
+      this.setupDebugKeyboardShortcuts();
+      this.logDebugInfo();
+    }
   }
 
   /**
