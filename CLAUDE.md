@@ -36,6 +36,29 @@ pnpm workspaces + Turbo 的 monorepo：
 
 非 trivial 的重构、schema 变更、新架构模式落地后，写一份短 ADR：`docs/adr/NNNN-<slug>.md`，结构 **Context / Decision / Consequences**。这是本项目的主要决策档案。
 
+## 设计哲学：以终为始，不背兼容包袱
+
+本项目目前**没有外部用户**，没有需要维护的公开 API 契约。AI 助手在做架构决策、重构、删旧代码时，**默认按"最终最优形态"设计，不要为了兼容旧代码、旧数据、旧文件结构而妥协**。
+
+具体应用：
+
+- **不写 backward-compatibility shims**。要废弃的旧 API、旧字段、旧文件直接删，不留过渡层、不加 deprecated 包装。
+- **不做小步迁移 / 双写 / 影子表**之类的稳态过渡方案，除非有明确的运行时数据要保住（如 production DB 里的真实数据）。
+- **遇到旧实现碍事直接重写**，不强求最小 diff。结果优先于"diff 整洁"。
+- **数据库 schema 变更**：production DB 里的现有用户数据要保（用 Prisma migration），但代码层面的旧调用、旧 Service 方法、旧 DTO 不需要保留。
+- 例外：仅在用户明确说"保留兼容性"时才加 shim/双写。
+
+这条规则也意味着：当你拿不准"该重写还是该兼容"时，**默认重写**。
+
+## 改进清单（Backlog）
+
+每当审查代码、讨论中发现"实现得不好"、"应该改进"、"以后要做"的问题，**统一追加到 [`docs/backlog.md`](docs/backlog.md)**，不要散落在对话里、ADR 里或随手新建的笔记里。
+
+- 每条记录至少包含：问题描述、所在文件/位置、改进方向、（可选）优先级
+- 已完成的条目用 `~~strikethrough~~` 划掉并在条目后注明落地的 ADR / commit
+- **每次迭代开始时翻这份清单挑选要做的事**，做完一项就划掉
+- AI 助手发现新问题时，主动追加到清单尾部
+
 ## OpenSpec（可选）
 
 仓库装了 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 用于 spec-driven 开发，规范在 `openspec/`。当前实践是**跳过 `/opsx:propose`**（太重），需要时直接用 `/opsx:apply` / `/opsx:archive`。

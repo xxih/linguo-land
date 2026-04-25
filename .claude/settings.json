@@ -1,0 +1,16 @@
+{
+  "enabledPlugins": {},
+  "permissions": {
+    "allow": [
+      "Bash(corepack pnpm exec tsc --noEmit)",
+      "Bash(corepack pnpm exec tsc --noEmit *)",
+      "Bash(pnpm exec tsc --noEmit)",
+      "Bash(pnpm exec tsc --noEmit *)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx tsc --noEmit *)",
+      "Bash(gh run watch *)",
+      "Bash(claude plugin --help)",
+      "Bash(claude plugin validate *)"
+    ]
+  }
+}
