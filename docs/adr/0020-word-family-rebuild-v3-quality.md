@@ -108,8 +108,29 @@ family）。
 - 边缘技术词（aardvark / cosine / blockchain）从 family 数据消失。这些不在 5 大
   curated 词表里，rebuild 不再为它们建 family。前端 lemma 路径仍能识别，但不会有
   surface-form 预览。学习者场景下可接受。
-- 'firemen → fireman' 这类 wink 没收录的不规则复数仍 miss（recall 扣 1.5 分）。
-  未来可补一份手动 irregular-plural.json，工程小，按需做。
+
+## Follow-up（2026-04-26 同日补丁，分数 98.5 → 100）
+
+`firemen / spokesmen / bacteria / farther` 等 wink 没覆盖的不规则形态做成 overrides
+file，被 rebuild / audit / DictionaryWhitelistService 当 wink 同等金标处理：
+
+- 新增 `apps/server/src/data/irregular-plural-overrides.json`（85 条）：
+  - 56 条 -man/-women 复合：fireman/policeman/chairman/businessman/spokesman/...
+  - 29 条学术不规则：bacterium→bacteria、matrix→matrices、cactus→cacti、
+    vertebra→vertebrae、analysis→analyses 等
+- 新增 `apps/server/src/data/irregular-adj-overrides.json`：farther/further → far
+- 新增 `apps/server/scripts/build-irregular-plural-overrides.mjs` 一次性生成脚本
+  （从 curated lemmas 抽 -man/-woman 复合 + 内置 NOT_MAN_PLURAL 豁免 + 手维科学技术段）
+- audit 的 noun/adj/verb checks 扩到 28+10+18 项覆盖 -man/-fe/-um/-on/-us/-ix/-is
+  各种边界
+- `word-families-quality.spec.ts` 加 11 条 PLURAL_OVERRIDE_CASES + adj 比较级断言
+
+数据效果：
+- recall 18.5 → **20.0 / 20**
+- 总分 98.5 → **100.0 / 100**
+
+为什么分两步：v3 主算法不依赖 overrides 也能 98.5；overrides 是补 wink vendor
+数据的边角缺口，逻辑独立。后续 wink 上游升级或自维 wink fork 时也能单独维护。
 
 ### 上线
 

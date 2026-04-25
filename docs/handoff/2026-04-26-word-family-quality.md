@@ -1,22 +1,23 @@
 # 交接：词族数据质量持续优化
 
-> **2026-04-26 收尾**：本轮把 audit 总分从 71 推到 **98.5/100**。
+> **2026-04-26 收尾**：本轮把 audit 总分从 71 推到 **100/100**。
 > 详情看 [ADR 0020](../adr/0020-word-family-rebuild-v3-quality.md)。
 > 本文档保留作为历史背景；现状以 ADR 0020 为准。
 
-## 最终评分：98.5 / 100
+## 最终评分：100 / 100
 
 跑 `cd apps/server && pnpm exec ts-node scripts/audit-word-families.ts` 即可复核。
 
 | 维度 | 旧 (v2) | 新 (v3) |
 | --- | --- | --- |
 | precision (误吞少) | 20.5 / 30 | **30.0 / 30** |
-| recall (漏收少) | 15.5 / 20 | **18.5 / 20** |
+| recall (漏收少) | 15.5 / 20 | **20.0 / 20** |
 | noise (伪生成少) | 0 / 15 | **15.0 / 15** |
 | learner-friendly | 35 / 35 | **35.0 / 35** |
-| **总分** | **71.0** | **98.5** |
+| **总分** | **71.0** | **100** |
 
-剩余 1.5 分扣在 `firemen → fireman` 不规则复数 wink 没收录（见 ADR 0020 风险一节）。
+满分。recall 最后 1.5 分通过 `irregular-plural-overrides.json` + `irregular-adj-overrides.json`
+补 wink 漏的 -man/-women / 学术不规则 / far→farther 等拿到（见 ADR 0020 follow-up）。
 
 ## 落地的关键 commit
 
@@ -84,10 +85,11 @@ cd ../extension && pnpm exec vitest run       # extension (241)
 
 ## 后续可选优化（不再阻塞主流程）
 
-### 1. firemen 类未覆盖不规则复数（recall +1.5）
+### 1. ~~firemen 类未覆盖不规则复数~~ ✅ 同日 follow-up 落地
 
-wink-lexicon 的 wn-noun-exceptions 没收录 fireman/policeman/postman 等"-man → -men"复数。
-要么手维一份 `irregular-plural-overrides.json` 加进 nounMap，要么扩 wink 数据。
+`apps/server/src/data/irregular-plural-overrides.json` + `irregular-adj-overrides.json`
+作为 wink 同等金标处理，rebuild / audit / DictionaryWhitelistService 三处都合并。
+后续要新增不规则形态，编辑这两个文件即可。
 
 ### 2. 短语 / 多词词条
 

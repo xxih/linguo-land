@@ -73,7 +73,7 @@
 - ~~**词族数据噪声 96%，audit 总分仅 71/100**~~ ✅ 落地于 [ADR 0020](adr/0020-word-family-rebuild-v3-quality.md)
   - 位置：`apps/server/scripts/rebuild-word-families.ts`、`apps/server/src/data/dictionary-whitelist.json`、`apps/server/src/data/word-families.json`
   - 复现 case：旧白名单 43,442 词夹大量 OCR 噪声（aa/aaa/aapl），rebuild 给每个噪声 base 又生成 4-6 个伪派生（aaed/aardwolfing/rivering），DB 满 17 万 junk surface form
-  - 改造方式：rebuild 重写为 v3 算法（lemma-driven 自顶向下 + 规则候选自底向上 + Norvig top 30K 验证 + compromise lemma 一致性校验）；脚本同时输出 dictionary-whitelist + word-families；新增 `word-families-quality.spec.ts` 133 条断言固化质量阈值
-  - 量化：总分 71→**98.5**，noise 96%→**0%**，precision 20.5→**30/30**，recall 15.5→**18.5/20**
+  - 改造方式：rebuild 重写为 v3 算法（lemma-driven 自顶向下 + 规则候选自底向上 + Norvig top 30K 验证 + compromise lemma 一致性校验）；脚本同时输出 dictionary-whitelist + word-families；新增 `word-families-quality.spec.ts` 144 条断言固化质量阈值；同日 follow-up 补 `irregular-plural-overrides.json`（-man/-women + 学术不规则）+ `irregular-adj-overrides.json`（far→farther 等）拿满 recall
+  - 量化：总分 71→**100**，noise 96%→**0%**，precision 20.5→**30/30**，recall 15.5→**20/20**
 
 - ~~**`debugUtils` 等临时代码遗留在生产路径**~~ ✅ 落地于 commit 把内存监控 + 快捷键 + banner 收进 `import.meta.env.MODE === 'development'` 分支，prod 构建会被 Vite tree-shake；处理状态 mutex + 超时看门狗 + 全局错误兜底保留（属 service-level safety net）。
