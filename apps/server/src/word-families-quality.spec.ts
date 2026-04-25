@@ -147,5 +147,29 @@ describe('词族 / 白名单质量', () => {
     expect(families.big).toContain('biggest');
     expect(families.good).toContain('better');
     expect(families.good).toContain('best');
+    // far → farther/further (irregular-adj-overrides 兜底，wink 漏)
+    expect(families.far).toContain('farther');
+    expect(families.far).toContain('further');
+    expect(families.far).toContain('farthest');
+    expect(families.bad).toContain('worse');
+    expect(families.bad).toContain('worst');
+  });
+
+  // 不规则复数 overrides（wink 漏的 -man/-women + 学术）
+  const PLURAL_OVERRIDE_CASES: Array<[string, string]> = [
+    ['fireman', 'firemen'],
+    ['policeman', 'policemen'],
+    ['chairman', 'chairmen'],
+    ['spokesman', 'spokesmen'],
+    ['businessman', 'businessmen'],
+    ['gentleman', 'gentlemen'],
+    ['fisherman', 'fishermen'],
+    ['congressman', 'congressmen'],
+    ['spokeswoman', 'spokeswomen'],
+    ['bacterium', 'bacteria'],
+    ['matrix', 'matrices'],
+  ];
+  it.each(PLURAL_OVERRIDE_CASES)('不规则复数 %s → %s 收齐', (sg, pl) => {
+    expect(families[sg]).toContain(pl);
   });
 });

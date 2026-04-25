@@ -73,6 +73,18 @@ const nounMap: Record<string, string> = JSON.parse(
 const adjMap: Record<string, string> = JSON.parse(
   fs.readFileSync(path.join(DATA_DIR, 'adj-inflection-map.json'), 'utf-8'),
 );
+// 手维的 overrides，wink 同等金标处理。
+//   - irregular-plural-overrides.json：wink 漏的 -man/-women 复合 + 学术不规则复数
+//   - irregular-adj-overrides.json：wink 漏的形容词比较级（far → farther/further 等）
+// 不持久化进 noun/adj-inflection-map.json，避免污染 wink vendor。
+const pluralOverrides: Record<string, string> = JSON.parse(
+  fs.readFileSync(path.join(DATA_DIR, 'irregular-plural-overrides.json'), 'utf-8'),
+);
+const adjOverrides: Record<string, string> = JSON.parse(
+  fs.readFileSync(path.join(DATA_DIR, 'irregular-adj-overrides.json'), 'utf-8'),
+);
+for (const [form, base] of Object.entries(pluralOverrides)) nounMap[form] = base;
+for (const [form, base] of Object.entries(adjOverrides)) adjMap[form] = base;
 
 const inflectionToBase = new Map<string, string>();
 for (const [f, b] of Object.entries({ ...verbMap, ...nounMap, ...adjMap })) {

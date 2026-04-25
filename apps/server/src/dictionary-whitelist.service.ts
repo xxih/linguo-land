@@ -46,9 +46,18 @@ export class DictionaryWhitelistService implements OnModuleInit {
     const verbRaw = readFileSync(join(dataDir, 'verb-inflection-map.json'), 'utf-8');
     const nounRaw = readFileSync(join(dataDir, 'noun-inflection-map.json'), 'utf-8');
     const adjRaw = readFileSync(join(dataDir, 'adj-inflection-map.json'), 'utf-8');
+    // wink 同等金标处理的 overrides（ADR 0020 follow-up）：
+    //   - irregular-plural-overrides.json：-man→-men 复合 + 学术不规则复数
+    //   - irregular-adj-overrides.json：wink 漏的形容词比较级（far→farther 等）
+    const pluralOvRaw = readFileSync(join(dataDir, 'irregular-plural-overrides.json'), 'utf-8');
+    const adjOvRaw = readFileSync(join(dataDir, 'irregular-adj-overrides.json'), 'utf-8');
     const verbInflectionMap = JSON.parse(verbRaw) as Record<string, string>;
-    const nounInflectionMap = JSON.parse(nounRaw) as Record<string, string>;
-    const adjInflectionMap = JSON.parse(adjRaw) as Record<string, string>;
+    const baseNounMap = JSON.parse(nounRaw) as Record<string, string>;
+    const baseAdjMap = JSON.parse(adjRaw) as Record<string, string>;
+    const pluralOverrides = JSON.parse(pluralOvRaw) as Record<string, string>;
+    const adjOverrides = JSON.parse(adjOvRaw) as Record<string, string>;
+    const nounInflectionMap: Record<string, string> = { ...baseNounMap, ...pluralOverrides };
+    const adjInflectionMap: Record<string, string> = { ...baseAdjMap, ...adjOverrides };
 
     const version = createHash('sha1')
       .update(whitelistRaw)
@@ -56,6 +65,8 @@ export class DictionaryWhitelistService implements OnModuleInit {
       .update(verbRaw)
       .update(nounRaw)
       .update(adjRaw)
+      .update(pluralOvRaw)
+      .update(adjOvRaw)
       .digest('hex')
       .slice(0, 12);
 

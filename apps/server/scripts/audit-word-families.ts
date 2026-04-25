@@ -27,12 +27,20 @@ const wset = new Set(whitelist.map((w) => w.toLowerCase()));
 const verbMap: Record<string, string> = JSON.parse(
   fs.readFileSync(path.join(DATA_DIR, 'verb-inflection-map.json'), 'utf-8'),
 );
-const nounMap: Record<string, string> = JSON.parse(
+const nounMapBase: Record<string, string> = JSON.parse(
   fs.readFileSync(path.join(DATA_DIR, 'noun-inflection-map.json'), 'utf-8'),
 );
-const adjMap: Record<string, string> = JSON.parse(
+const adjMapBase: Record<string, string> = JSON.parse(
   fs.readFileSync(path.join(DATA_DIR, 'adj-inflection-map.json'), 'utf-8'),
 );
+const pluralOverrides: Record<string, string> = JSON.parse(
+  fs.readFileSync(path.join(DATA_DIR, 'irregular-plural-overrides.json'), 'utf-8'),
+);
+const adjOverrides: Record<string, string> = JSON.parse(
+  fs.readFileSync(path.join(DATA_DIR, 'irregular-adj-overrides.json'), 'utf-8'),
+);
+const nounMap: Record<string, string> = { ...nounMapBase, ...pluralOverrides };
+const adjMap: Record<string, string> = { ...adjMapBase, ...adjOverrides };
 
 // === 反向索引：surface form → 它属于哪个 family ===
 const wordToFamily = new Map<string, string>();
@@ -218,6 +226,19 @@ const VERB_CHECKS: Array<{ base: string; needs: string[] }> = [
   { base: 'eat', needs: ['eats', 'ate', 'eaten', 'eating'] },
   { base: 'write', needs: ['writes', 'wrote', 'written', 'writing'] },
   { base: 'speak', needs: ['speaks', 'spoke', 'spoken', 'speaking'] },
+  // dual-form past tense（v3 关键修复）
+  { base: 'dream', needs: ['dreams', 'dreamed', 'dreaming'] },
+  { base: 'learn', needs: ['learns', 'learned', 'learning'] },
+  { base: 'spell', needs: ['spells', 'spelled', 'spelling'] },
+  { base: 'burn', needs: ['burns', 'burned', 'burning'] },
+  // 双辅音
+  { base: 'run', needs: ['runs', 'ran', 'running'] },
+  { base: 'sit', needs: ['sits', 'sat', 'sitting'] },
+  { base: 'begin', needs: ['begins', 'began', 'begun', 'beginning'] },
+  // -e 结尾
+  { base: 'make', needs: ['makes', 'made', 'making'] },
+  { base: 'take', needs: ['takes', 'took', 'taken', 'taking'] },
+  { base: 'give', needs: ['gives', 'gave', 'given', 'giving'] },
 ];
 let verbMiss = 0;
 const verbDetails: string[] = [];
@@ -238,39 +259,86 @@ verbDetails.slice(0, 10).forEach((d) => console.log(`  ${d}`));
 
 // 2c. 名词复数 / 形容词比较级
 const NOUN_CHECKS = [
+  // 规则复数
   { base: 'dog', needs: ['dogs'] },
   { base: 'cat', needs: ['cats'] },
   { base: 'box', needs: ['boxes'] },
   { base: 'baby', needs: ['babies'] },
+  { base: 'wolf', needs: ['wolves'] },
+  { base: 'leaf', needs: ['leaves'] },
+  { base: 'knife', needs: ['knives'] },
+  { base: 'wife', needs: ['wives'] },
+  // 学术 -is/-um/-on/-us/-ix
   { base: 'analysis', needs: ['analyses'] },
   { base: 'crisis', needs: ['crises'] },
+  { base: 'thesis', needs: ['theses'] },
+  { base: 'datum', needs: ['data'] },
+  { base: 'medium', needs: ['media'] },
+  { base: 'phenomenon', needs: ['phenomena'] },
+  { base: 'criterion', needs: ['criteria'] },
+  { base: 'cactus', needs: ['cacti'] },
+  { base: 'matrix', needs: ['matrices'] },
+  // 古英语 -man/-men 复合（wink 漏，由 overrides 补）
   { base: 'fireman', needs: ['firemen'] },
+  { base: 'policeman', needs: ['policemen'] },
+  { base: 'chairman', needs: ['chairmen'] },
+  { base: 'spokesman', needs: ['spokesmen'] },
+  { base: 'businessman', needs: ['businessmen'] },
+  { base: 'gentleman', needs: ['gentlemen'] },
+  { base: 'fisherman', needs: ['fishermen'] },
+  { base: 'congressman', needs: ['congressmen'] },
+  // -woman → -women
+  { base: 'spokeswoman', needs: ['spokeswomen'] },
+  // 全不规则
+  { base: 'foot', needs: ['feet'] },
+  { base: 'tooth', needs: ['teeth'] },
+  { base: 'goose', needs: ['geese'] },
 ];
 let nounMiss = 0;
+const nounDetails: string[] = [];
 for (const { base, needs } of NOUN_CHECKS) {
   if (!families[base]) {
     nounMiss += needs.length;
+    nounDetails.push(`✗ ${base} 没 family`);
     continue;
   }
-  nounMiss += needs.filter((n) => !families[base].includes(n)).length;
+  const missing = needs.filter((n) => !families[base].includes(n));
+  if (missing.length > 0) {
+    nounDetails.push(`✗ ${base} 缺 ${missing.join(',')}`);
+    nounMiss += missing.length;
+  }
 }
 console.log(`常见名词复数漏收: ${nounMiss}`);
+nounDetails.slice(0, 10).forEach((d) => console.log(`  ${d}`));
 
 const ADJ_CHECKS = [
   { base: 'fast', needs: ['faster', 'fastest'] },
   { base: 'small', needs: ['smaller', 'smallest'] },
   { base: 'happy', needs: ['happier', 'happiest'] },
   { base: 'easy', needs: ['easier', 'easiest'] },
+  { base: 'big', needs: ['bigger', 'biggest'] },
+  { base: 'large', needs: ['larger', 'largest'] },
+  { base: 'busy', needs: ['busier', 'busiest'] },
+  { base: 'good', needs: ['better', 'best'] },
+  { base: 'bad', needs: ['worse', 'worst'] },
+  { base: 'far', needs: ['farther', 'farthest'] },
 ];
 let adjMiss = 0;
+const adjDetails: string[] = [];
 for (const { base, needs } of ADJ_CHECKS) {
   if (!families[base]) {
     adjMiss += needs.length;
+    adjDetails.push(`✗ ${base} 没 family`);
     continue;
   }
-  adjMiss += needs.filter((n) => !families[base].includes(n)).length;
+  const missing = needs.filter((n) => !families[base].includes(n));
+  if (missing.length > 0) {
+    adjDetails.push(`✗ ${base} 缺 ${missing.join(',')}`);
+    adjMiss += missing.length;
+  }
 }
 console.log(`常见形容词比较级漏收: ${adjMiss}`);
+adjDetails.slice(0, 10).forEach((d) => console.log(`  ${d}`));
 console.log('');
 
 // ========== 维度 3：噪声 (伪生成形态) ==========
