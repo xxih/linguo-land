@@ -9,6 +9,12 @@ import { DictionaryLoader } from './dictionaryLoader';
  */
 export class HighlightManager {
   private registry: HighlightRegistry;
+  /**
+   * Text 节点反查索引：getHighlightAtPosition 用 caretRangeFromPoint 拿到落点 Text 节点 +
+   * offset，再用这个 Map 在 O(1) 内取到该节点上的所有 HighlightInfo，避免对 registry.items
+   * 全表 getClientRects() 几何扫描（5000 高亮 × 鼠标移动 = 卡到崩）。
+   */
+  private itemsByNode: Map<Text, HighlightInfo[]> = new Map();
   private altKeyPressed: boolean = false; // 新增：跟踪 Alt 键状态
   private logger: Logger;
 
@@ -144,12 +150,26 @@ export class HighlightManager {
     try {
       CSS.highlights.clear();
       this.registry.items = [];
+      this.itemsByNode.clear();
       this.registry.unknownHighlight = new Highlight();
       this.registry.learningHighlight = new Highlight();
       this.registry.currentHoverHighlight = new Highlight();
       this.registry.hoveredWord = null;
     } catch (error) {
       this.logger.error('Failed to clear highlights', error as Error);
+    }
+  }
+
+  /**
+   * 把 HighlightInfo 同时压进 items 数组和 Text 节点反查索引。
+   */
+  private addItem(info: HighlightInfo): void {
+    this.registry.items.push(info);
+    const list = this.itemsByNode.get(info.textNode);
+    if (list) {
+      list.push(info);
+    } else {
+      this.itemsByNode.set(info.textNode, [info]);
     }
   }
 
@@ -415,7 +435,7 @@ export class HighlightManager {
         range: range,
       };
 
-      this.registry.items.push(highlightInfo);
+      this.addItem(highlightInfo);
       return highlightInfo;
     } catch (error) {
       this.logger.error('创建Range失败', error as Error, {
@@ -461,10 +481,20 @@ export class HighlightManager {
       }
     });
 
-    // 从注册表中移除这些项
+    // 从注册表 + 反查索引中同时移除这些项
     this.registry.items = this.registry.items.filter(
       (item) => item.word.toLowerCase() !== wordLower,
     );
+    for (const item of matchingItems) {
+      const list = this.itemsByNode.get(item.textNode);
+      if (!list) continue;
+      const filtered = list.filter((i) => i !== item);
+      if (filtered.length > 0) {
+        this.itemsByNode.set(item.textNode, filtered);
+      } else {
+        this.itemsByNode.delete(item.textNode);
+      }
+    }
 
     // 更新CSS highlights
     CSS.highlights.set('lang-helper--unknown', this.registry.unknownHighlight);
@@ -606,7 +636,7 @@ export class HighlightManager {
         range: range,
       };
 
-      this.registry.items.push(highlightInfo);
+      this.addItem(highlightInfo);
 
       // 根据状态添加到相应的高亮集合
       if (status === 'unknown') {
@@ -667,17 +697,30 @@ export class HighlightManager {
   }
 
   /**
-   * 检查点击位置是否在高亮区域内
+   * 检查点击位置是否在高亮区域内。
+   *
+   * 旧实现：对 registry.items 全表扫，每项调用 range.getClientRects()。5000 高亮 ×
+   * 一次 mousemove = 5000 次几何查询，alt 悬停时整页直接卡死。
+   *
+   * 新实现：caretRangeFromPoint 用浏览器自身的命中测试拿到落点 Text 节点 + offset
+   * （这是浏览器渲染层 O(log n) 的查询），再用 itemsByNode 反查索引拿到该节点上
+   * 的 HighlightInfo 列表（一般 1-3 个），按 offset 区间精确匹配，全程 O(1) 摊销。
    */
   getHighlightAtPosition(x: number, y: number): HighlightInfo | null {
-    for (const item of this.registry.items) {
-      const rects = item.range.getClientRects();
+    const range = document.caretRangeFromPoint(x, y);
+    if (!range) return null;
 
-      // 检查所有矩形区域（处理跨行的情况）
-      for (const rect of rects) {
-        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-          return item;
-        }
+    const node = range.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE) return null;
+
+    const list = this.itemsByNode.get(node as Text);
+    if (!list || list.length === 0) return null;
+
+    const offset = range.startOffset;
+    for (const item of list) {
+      // caret 卡在词尾时 offset 等于 endOffset，按"半开区间"放过它
+      if (offset >= item.startOffset && offset < item.endOffset) {
+        return item;
       }
     }
     return null;

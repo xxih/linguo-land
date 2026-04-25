@@ -27,7 +27,7 @@
 
 ### P1 — 性能与稳定性
 
-- **`getHighlightAtPosition` O(n) 线性扫描**
+- ~~**`getHighlightAtPosition` O(n) 线性扫描**~~ ✅ 落地于 [ADR 0012](adr/0012-highlight-hit-test-via-caret-range.md)
   - 位置：`src/content/utils/highlightManager.ts:672`
   - 现状：每次点击/悬停遍历所有 `registry.items`，每项再 `getClientRects()`。5000 高亮 → 每次点击 5000 次几何查询。
   - 改进方向：用 `document.caretPositionFromPoint(x, y)` 拿到落点 Text 节点 + offset，再用 `Map<Text, HighlightInfo[]>` 反查，O(n) → O(1)。
