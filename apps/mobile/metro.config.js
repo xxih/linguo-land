@@ -17,11 +17,16 @@ const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-config.watchFolders = [workspaceRoot];
+// 保留 Expo 默认 watchFolders（asset 等），再追加 monorepo 根
+config.watchFolders = Array.from(
+  new Set([...(config.watchFolders ?? []), workspaceRoot]),
+);
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
+// pnpm 的 .pnpm 平铺布局下，Metro 默认 hierarchical lookup 会把同名包解析进
+// 错误的拷贝。关掉它 + 上面显式 nodeModulesPaths 是 pnpm monorepo 的标配。
 config.resolver.disableHierarchicalLookup = true;
 
 module.exports = withNativeWind(config, { input: './global.css' });

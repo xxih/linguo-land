@@ -6,13 +6,11 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "android": {
       "package": "land.linguo.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
+      }
     },
     "ios": {
       "bundleIdentifier": "land.linguo.mobile",
