@@ -12,9 +12,10 @@ chrome-extension/manifest.js
 chrome-extension/pre-build.tsconfig.tsbuildinfo
 tsconfig.tsbuildinfo
 
-# env
+# env (track example templates only)
 **/.env.*
 **/.env
+!**/.env.example
 
 # etc
 .DS_Store

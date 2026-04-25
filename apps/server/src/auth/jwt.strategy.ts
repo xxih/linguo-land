@@ -1,20 +1,24 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../prisma.service';
+import { requireConfig } from '../env.util';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    config: ConfigService,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'your-secret-key',
+      secretOrKey: requireConfig(config, 'JWT_SECRET'),
     });
   }
 
   async validate(payload: any) {
-    // payload 包含 { email, sub (userId) }
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
     });
@@ -23,7 +27,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('用户不存在');
     }
 
-    // 返回的对象会被附加到 Request 对象上作为 req.user
     return { id: user.id, email: user.email };
   }
 }

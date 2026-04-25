@@ -1,18 +1,28 @@
 import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
+import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { buildCorsOriginValidator } from './cors';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const config = app.get(ConfigService);
 
-  // 启用CORS，允许Chrome扩展访问
+  const allowedOrigins = (config.get<string>('CORS_ORIGINS') ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const isProd = config.get<string>('NODE_ENV') === 'production';
+
   app.enableCors({
-    origin: true, // 允许所有来源（在生产环境中应该限制）
+    origin: buildCorsOriginValidator({ allowedOrigins, isProd }),
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  const port = process.env.PORT ?? 3000;
+  const port = config.get<number>('PORT') ?? 3000;
   await app.listen(port);
-  console.log(`[START] Server running on http://localhost:${port}`);
+  Logger.log(`Server running on http://localhost:${port}`, 'Bootstrap');
 }
+
 bootstrap();
