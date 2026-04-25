@@ -5,7 +5,7 @@ import type {
   WordFamiliarityStatus,
 } from 'shared-types';
 import type { HighlightManager } from './highlightManager';
-import { WordCardManager } from './wordCardManager';
+import type { WordCardManager } from './wordCardManager';
 import { DictionaryLoader } from './dictionaryLoader';
 import { SettingsManager } from './settingsManager';
 import { TextProcessor } from './textProcessor';
@@ -22,9 +22,9 @@ export class EventHandlers {
   private dictionaryLoader: DictionaryLoader;
   private settingsManager: SettingsManager;
 
-  constructor(highlightManager: HighlightManager) {
+  constructor(highlightManager: HighlightManager, wordCardManager: WordCardManager) {
     this.highlightManager = highlightManager;
-    this.wordCardManager = new WordCardManager();
+    this.wordCardManager = wordCardManager;
     this.dictionaryLoader = DictionaryLoader.getInstance();
     this.settingsManager = SettingsManager.getInstance();
     this.initializeEventListeners();

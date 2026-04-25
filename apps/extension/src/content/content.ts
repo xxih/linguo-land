@@ -1,26 +1,25 @@
 import type { ChromeMessage, ChromeMessageResponse } from 'shared-types';
+import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { TextProcessor } from './utils/textProcessor';
 import { HighlightManager } from './utils/highlightManager';
 import { EventHandlers } from './utils/eventHandlers';
 import { DebugUtils } from './utils/debugUtils';
 import { DictionaryLoader } from './utils/dictionaryLoader';
 import { SettingsManager } from './utils/settingsManager';
+import { WordCardManager } from './utils/wordCardManager';
 import { debounce } from './utils/helpers';
 import { HighlightAPIChecker, PageInfo } from './utils/helpers';
+import { UISettingsManager } from '@/content-ui/utils/uiSettingsManager';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('ContentScript');
-
-logger.info('Content script loaded', { version: 'v5' });
-
-// 检查浏览器是否支持 CSS Custom Highlight API
-HighlightAPIChecker.logSupport();
 
 // 核心管理器实例
 let highlightManager: HighlightManager;
 let debugUtils: DebugUtils;
 let dictionaryLoader: DictionaryLoader;
 let settingsManager: SettingsManager;
+let wordCardManager: WordCardManager;
 
 /**
  * 应用自定义颜色设置
@@ -55,10 +54,11 @@ function applyCustomColors(): void {
 }
 
 // 初始化所有管理器
-async function initializeManagers(): Promise<void> {
+async function initializeManagers(ctx: ContentScriptContext): Promise<void> {
   highlightManager = new HighlightManager();
+  wordCardManager = new WordCardManager(ctx);
   // 初始化事件处理器
-  new EventHandlers(highlightManager);
+  new EventHandlers(highlightManager, wordCardManager);
   debugUtils = new DebugUtils(highlightManager);
 
   // 初始化词典加载器
@@ -602,10 +602,11 @@ function setupSettingsListener(): void {
  * 显示 Toast 通知
  */
 function showToast(message: string, words: string[], type: 'success' | 'info' = 'success'): void {
-  const toastEvent = new CustomEvent('lang-helper-show-toast', {
-    detail: { message, words, type },
-  });
-  document.dispatchEvent(toastEvent);
+  if (!wordCardManager) {
+    logger.warn('WordCardManager not initialized, skipping toast', { message });
+    return;
+  }
+  void wordCardManager.showToast(message, words, type);
 }
 
 /**
@@ -763,7 +764,7 @@ function setupBatchOperationListener(): void {
 /**
  * 初始化核心功能（高亮、扫描等）
  */
-async function initializeCoreFeatures(): Promise<void> {
+async function initializeCoreFeatures(ctx: ContentScriptContext): Promise<void> {
   // 检查当前网站是否被禁用
   if (settingsManager.isCurrentSiteDisabled()) {
     logger.info('Current site is disabled, skipping core features initialization');
@@ -774,7 +775,7 @@ async function initializeCoreFeatures(): Promise<void> {
   applyCustomColors();
 
   // 初始化管理器
-  await initializeManagers();
+  await initializeManagers(ctx);
 
   // 设置DOM观察器
   setupDOMObserver();
@@ -794,10 +795,18 @@ async function initializeCoreFeatures(): Promise<void> {
 }
 
 /**
- * 初始化应用程序
+ * 初始化应用程序（由 entrypoint 调用，传入 WXT 提供的 ctx）
  */
-async function initializeApp(): Promise<void> {
-  logger.info('Content script ready, starting initialization');
+export async function setupContent(ctx: ContentScriptContext): Promise<void> {
+  logger.info('Content script loaded', { version: 'v6' });
+
+  // 检查浏览器是否支持 CSS Custom Highlight API
+  HighlightAPIChecker.logSupport();
+
+  // 初始化 UI 设置管理器（content-ui 组件读取的 AI mode 等设置）
+  UISettingsManager.getInstance()
+    .initialize()
+    .catch((err) => logger.error('Failed to initialize UISettingsManager', err as Error));
 
   // 记录页面基本信息
   PageInfo.logInfo();
@@ -819,8 +828,5 @@ async function initializeApp(): Promise<void> {
   }
 
   // 插件已启用，初始化核心功能
-  await initializeCoreFeatures();
+  await initializeCoreFeatures(ctx);
 }
-
-// 启动应用程序
-initializeApp();
