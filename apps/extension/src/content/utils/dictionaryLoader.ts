@@ -3,6 +3,8 @@ import { logger } from '../../utils/logger';
 
 export interface DictionaryLoadResult {
   ok: boolean;
+  /** 后端下发的副词→形容词映射，用于 textProcessor 不规则变形还原 */
+  adverbMap?: Record<string, string>;
   error?: string;
 }
 
@@ -159,6 +161,7 @@ export class DictionaryLoader {
     }
 
     this.dictionarySet = new Set(result.words.map((word) => word.toLowerCase()));
+    const adverbMap = result.adverbMap;
     await this.loadIgnoredWords();
 
     const endTime = performance.now();
@@ -168,9 +171,10 @@ export class DictionaryLoader {
       ignoredCount: this.ignoredWords.size,
       version: result.version,
       syncedAt: result.syncedAt,
+      adverbMapSize: adverbMap ? Object.keys(adverbMap).length : 0,
     });
 
-    return { ok: true };
+    return { ok: true, adverbMap };
   }
 
   /**

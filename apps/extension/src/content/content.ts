@@ -66,7 +66,11 @@ async function initializeManagers(ctx: ContentScriptContext): Promise<void> {
   dictionaryLoader = DictionaryLoader.getInstance();
   const loadResult = await dictionaryLoader.initialize();
   if (loadResult.ok) {
-    logger.info('Dictionary loader initialized');
+    // 后端下发的副词→形容词映射注入 textProcessor，新增不规则变形不需发扩展新版
+    TextProcessor.setAdverbMap(loadResult.adverbMap ?? null);
+    logger.info('Dictionary loader initialized', {
+      adverbMapSize: loadResult.adverbMap ? Object.keys(loadResult.adverbMap).length : 0,
+    });
   } else {
     logger.error('Dictionary load failed', new Error(loadResult.error ?? 'unknown'));
     // 显式提示，不再静默降级

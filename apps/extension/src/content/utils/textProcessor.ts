@@ -19,6 +19,22 @@ export class TextProcessor {
   private static readonly lemmaCache: Map<string, string[]> = new Map();
 
   /**
+   * 副词→形容词不规则映射（如 happily → happy）。
+   *
+   * 数据由后端 GET /api/v1/dictionary-whitelist 一并返回（ADR 0011 + 后续扩展），
+   * `setAdverbMap` 在 content 拿到 DictionaryLoader.initialize 结果时注入。
+   * 远端缺失或还没拉到时退回 `null`，`getLemmasForWord` 仍可走 -ly 后缀启发式。
+   */
+  private static adverbMap: Record<string, string> | null = null;
+
+  /** 由 content.ts 在 DictionaryLoader 拿到 adverbMap 后调用，注入到本类。 */
+  static setAdverbMap(map: Record<string, string> | null): void {
+    this.adverbMap = map;
+    // 副词映射变化会影响词形还原结果，缓存必须清空
+    this.lemmaCache.clear();
+  }
+
+  /**
    * 检查元素是否可见。
    *
    * 旧实现对每个祖先调用 `getComputedStyle` + 最后再 `getBoundingClientRect`，
@@ -247,151 +263,16 @@ export class TextProcessor {
     // 2. 处理形容词/副词 (例如 'frequently' -> 'frequent')
     if (doc.has('#Adverb')) {
       const wordLower = word.toLowerCase();
+      const remoteMapping = this.adverbMap?.[wordLower];
 
-      // 特殊副词到形容词的映射表
-      const specialMappings: { [key: string]: string } = {
-        // 类别一: -ily => -y
-        happily: 'happy',
-        easily: 'easy',
-        busily: 'busy',
-        heavily: 'heavy',
-        angrily: 'angry',
-        readily: 'ready',
-        steadily: 'steady',
-        luckily: 'lucky',
-        prettily: 'pretty',
-        lazily: 'lazy',
-        greedily: 'greedy',
-        noisily: 'noisy',
-        clumsily: 'clumsy',
-        nastily: 'nasty',
-        heartily: 'hearty',
-        drowsily: 'drowsy',
-        gloomily: 'gloomy',
-        hastily: 'hasty',
-        merrily: 'merry',
-        paltry: 'paltry',
-        chillily: 'chilly',
-        sillily: 'silly',
-        jollily: 'jolly', // 新增
-        wilily: 'wily',
-        craftily: 'crafty',
-        surlily: 'surly', // 新增
-
-        // 类别二: -ly => -le
-        simply: 'simple',
-        gently: 'gentle',
-        subtly: 'subtle',
-        ably: 'able',
-        horribly: 'horrible',
-        terribly: 'terrible',
-        incredibly: 'incredible',
-        possibly: 'possible',
-        probably: 'probable',
-        visibly: 'visible',
-        invisibly: 'invisible',
-        sensibly: 'sensible',
-        nobly: 'noble',
-        humbly: 'humble',
-        idly: 'idle',
-        considerably: 'considerable',
-        responsibly: 'responsible',
-        fashionably: 'fashionable',
-        comfortably: 'comfortable',
-        admirably: 'admirable',
-        miserably: 'miserable',
-        remarkably: 'remarkable',
-        reasonably: 'reasonable',
-        doubly: 'double',
-        trebly: 'treble',
-        capably: 'capable',
-        singly: 'single',
-        amply: 'ample',
-        feebly: 'feeble',
-        supply: 'supple', // 新增
-
-        // 类别三: -ally => -ic(al)
-        basically: 'basic',
-        dramatically: 'dramatic',
-        tragically: 'tragic',
-        fantastically: 'fantastic',
-        automatically: 'automatic',
-        scientifically: 'scientific',
-        specifically: 'specific',
-        historically: 'historical',
-        economically: 'economic',
-        academically: 'academic',
-        artistically: 'artistic',
-        energetically: 'energetic',
-        enthusiastically: 'enthusiastic',
-        frantically: 'frantic',
-        generically: 'generic',
-        logically: 'logical',
-        magically: 'magical',
-        organically: 'organic',
-        poetically: 'poetic',
-        realistically: 'realistic',
-        strategically: 'strategic',
-        symbolically: 'symbolic',
-        systematically: 'systematic',
-        theatrically: 'theatrical',
-        diagonally: 'diagonal', // 新增 (-ally => -al)
-        peripherally: 'peripheral', // 新增 (-ally => -al)
-        // 特殊例外
-        publicly: 'public',
-        specially: 'special', // 不是 -ally 规则，但常混淆
-
-        // 类别四: 还原词尾的 "e"
-        truly: 'true',
-        duly: 'due',
-        unduly: 'undue',
-        wholly: 'whole',
-        arguably: 'arguable',
-        solely: 'sole', // 新增
-
-        // 类别五: -lly => -ll
-        fully: 'full',
-        dully: 'dull',
-        shrilly: 'shrill',
-
-        // 类别六: 完全不规则变形
-        well: 'good',
-
-        // 类别九: 源自过去分词 (-edly => -ed) (新增类别)
-        allegedly: 'alleged',
-        reportedly: 'reported',
-        supposedly: 'supposed',
-        assuredly: 'assured',
-        markedly: 'marked',
-        undoubtedly: 'undoubted',
-        deservedly: 'deserved',
-        repeatedly: 'repeated',
-        decidedly: 'decided',
-        hurriedly: 'hurried',
-        confessedly: 'confessed',
-
-        // 类别十 & 混合情况
-        drily: 'dry',
-        shyly: 'shy',
-        coyly: 'coy',
-        slyly: 'sly',
-        wryly: 'wry',
-        inwardly: 'inward',
-        outwardly: 'outward',
-        upwardly: 'upward',
-        downwardly: 'downward', // *-wardly => *-ward
-      };
-
-      // 首先检查特殊映射
-      if (specialMappings[wordLower]) {
-        const adjective = specialMappings[wordLower];
-        // 验证这个形容词是否被 compromise 识别
-        const adjDoc = nlp(adjective);
+      // 优先用后端下发的映射（不规则变形 happily→happy 等）
+      if (remoteMapping) {
+        const adjDoc = nlp(remoteMapping);
         if (adjDoc.has('#Adjective')) {
-          lemmas.add(adjective);
+          lemmas.add(remoteMapping);
         }
       }
-      // 对于以 -ly 结尾的副词，尝试移除后缀
+      // 后端没覆盖到的话，按 -ly 后缀启发式做兜底
       else if (wordLower.endsWith('ly') && wordLower.length > 4) {
         const potentialAdjective = wordLower.slice(0, -2);
         // 使用 compromise 验证移除 -ly 后是否是有效的形容词

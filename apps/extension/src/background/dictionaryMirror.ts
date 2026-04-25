@@ -7,6 +7,7 @@ const SYNC_TIMEOUT_MS = 30_000;
 interface RemoteSnapshot {
   version: string;
   words: string[];
+  adverbMap?: Record<string, string>;
 }
 
 interface PersistedSnapshot extends RemoteSnapshot {
@@ -18,6 +19,7 @@ export interface DictionaryWhitelistResult {
   words?: string[];
   version?: string;
   syncedAt?: string;
+  adverbMap?: Record<string, string>;
   error?: string;
 }
 
@@ -106,6 +108,7 @@ export class DictionaryMirror {
         const next: PersistedSnapshot = {
           version: data.version,
           words: data.words,
+          adverbMap: data.adverbMap,
           syncedAt: new Date().toISOString(),
         };
 
@@ -157,6 +160,7 @@ export class DictionaryMirror {
         words: this.snapshot.words,
         version: this.snapshot.version,
         syncedAt: this.snapshot.syncedAt,
+        adverbMap: this.snapshot.adverbMap,
       };
     }
 

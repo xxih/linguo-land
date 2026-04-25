@@ -48,15 +48,15 @@
 
 ### P2 — 卫生 / 长期债务
 
-- **副词映射表 400 行硬编码**
+- ~~**副词映射表 400 行硬编码**~~ ✅ 落地于 [ADR 0016](adr/0016-adverb-map-server-source.md)
   - 位置：`src/content/utils/textProcessor.ts:246-377`
   - 改进方向：用更完整的 wordnet 数据，或把映射数据下沉到后端、随词典一起拉。
 
 - ~~**字幕特殊路径只覆盖 YouTube/Netflix**~~ ✅ 抽到 [`src/content/utils/subtitleSites.ts`](../apps/extension/src/content/utils/subtitleSites.ts) 的 `SUBTITLE_SITES` 数组，新增站点（Bilibili / Coursera / TED）只需追加一项配置；将来要换异步远端拉取，调用 API 不变。
 
-- **WXT 迁移残留：entrypoints 是壳，真实逻辑还在 `src/content/`、`src/background/`**
+- ~~**WXT 迁移残留：entrypoints 是壳，真实逻辑还在 `src/content/`、`src/background/`**~~ ⏭️ 不做。重新评估：thin entrypoints + 业务代码在 `src/content/` `src/background/` 是 WXT 推崇的"entrypoints 即入口、co-locate 业务逻辑到 src/<area>/"模式（参 `src/entrypoints/options/`、`src/entrypoints/popup/` 反而是因为 HTML 入口才折叠成文件夹的特例）。整体改名带来的 diff 量大、价值弱（无功能/性能差异），保留当前结构。
   - 位置：`src/entrypoints/content.ts`、`src/entrypoints/background.ts`
-  - 改进方向：逐步把核心逻辑收敛到 entrypoints 下。
+  - 改进方向：~~逐步把核心逻辑收敛到 entrypoints 下~~
 
 - ~~**核心算法测试覆盖不足**~~ ✅ 落地：textProcessor.test.ts 修复了过时的 splitCamelCase 期望（"技术术语不拆"）+ 新增 lemmaCache 缓存命中测试；新增 highlightManager.test.ts 覆盖 `updateWordStatus(familyRoot)` 整族匹配。caretRangeFromPoint 路径 jsdom 不支持，留待真实浏览器 e2e 覆盖。
 

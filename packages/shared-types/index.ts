@@ -135,6 +135,11 @@ export interface DictionaryWhitelistResponse {
   words?: string[];
   version?: string;
   syncedAt?: string;
+  /**
+   * 副词→形容词映射（如 happily → happy）。客户端 textProcessor 用它做不规则变形
+   * 的词形还原；后端单独维护，hot-update 不需要发扩展新版本。
+   */
+  adverbMap?: Record<string, string>;
   error?: string;
 }
 
