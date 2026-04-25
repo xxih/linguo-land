@@ -41,5 +41,9 @@ tsconfig.tsbuildinfo
 *.jsonl
 dist.zip
 
+# 阅读器：用户上传的 TXT/EPUB 落盘到 apps/server/uploads/，不入仓库
+apps/server/uploads/*
+!apps/server/uploads/.gitkeep
+
 
 archived/

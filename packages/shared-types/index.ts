@@ -153,6 +153,59 @@ export interface DictionaryWhitelistResponse {
   error?: string;
 }
 
+// --- 阅读器 / 文档 ---
+
+export type DocumentFormat = 'TXT' | 'EPUB';
+
+/** EPUB 目录条目；TXT 文档没有 toc */
+export interface DocumentTocEntry {
+  /** 章节显示名 */
+  label: string;
+  /** EPUB 内部 href，如 "OPS/chap03.xhtml#section-1" */
+  href: string;
+  /** 可选 CFI（v1 暂不预生成） */
+  cfi?: string;
+  children?: DocumentTocEntry[];
+}
+
+/** 文档元信息（书架/详情接口返回） */
+export interface DocumentMeta {
+  id: number;
+  title: string;
+  author: string | null;
+  fileFormat: DocumentFormat;
+  sizeBytes: number;
+  sourceLang: string;
+  toc: DocumentTocEntry[] | null;
+  /** ownerId === null，系统预置文档，所有用户可读但不可删 */
+  isPreset: boolean;
+  createdAt: string; // ISO 8601
+  updatedAt: string;
+}
+
+export interface DocumentListResponse {
+  documents: DocumentMeta[];
+}
+
+/** 阅读进度返回体 */
+export interface ReadingProgressDto {
+  documentId: number;
+  /**
+   * EPUB: epub.js CFI 字符串（如 "epubcfi(/6/4[chap01]!/4/2[para01]/1:0)"）
+   * TXT:  "<chapterIndex>:<charOffset>"，v1 chapterIndex 恒为 0
+   */
+  locator: string;
+  /** 0..1，书架进度条用 */
+  percent: number | null;
+  updatedAt: string; // ISO 8601
+}
+
+export interface UpsertReadingProgressRequest {
+  documentId: number;
+  locator: string;
+  percent?: number;
+}
+
 export interface ChromeMessageResponse {
   success: boolean;
   data?:

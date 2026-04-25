@@ -11,6 +11,8 @@ import { DictionaryWhitelistService } from './dictionary-whitelist.service';
 import { PrismaService } from './prisma.service';
 import { AuthModule } from './auth/auth.module';
 import { AiModule } from './ai/ai.module';
+import { DocumentsModule } from './documents/documents.module';
+import { ReadingProgressModule } from './reading-progress/reading-progress.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { AiModule } from './ai/ai.module';
     }),
     AuthModule,
     AiModule,
+    DocumentsModule,
+    ReadingProgressModule,
   ],
   controllers: [
     AppController,
