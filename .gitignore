@@ -33,6 +33,11 @@ tsconfig.tsbuildinfo
 # Claude Code local overrides (personal, not shared)
 .claude/settings.local.json
 
+# playwright / e2e —— 跑 verify / spec 时本地产物（细节见 .claude/skills/e2e/）
+.playwright-cli/
+**/playwright-report/
+**/test-results/
+
 *.jsonl
 dist.zip
 
