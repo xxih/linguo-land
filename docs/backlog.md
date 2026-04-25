@@ -58,8 +58,6 @@
   - 位置：`src/entrypoints/content.ts`、`src/entrypoints/background.ts`
   - 改进方向：逐步把核心逻辑收敛到 entrypoints 下。
 
-- **核心算法测试覆盖不足**
-  - 位置：仅有 `src/content/utils/textProcessor.test.ts`，高亮逻辑 / 点击命中 / 词形还原回归都没有
-  - 改进方向：补词形还原、高亮命中两条核心路径的测试（按全局规则只测核心，不凑数）。
+- ~~**核心算法测试覆盖不足**~~ ✅ 落地：textProcessor.test.ts 修复了过时的 splitCamelCase 期望（"技术术语不拆"）+ 新增 lemmaCache 缓存命中测试；新增 highlightManager.test.ts 覆盖 `updateWordStatus(familyRoot)` 整族匹配。caretRangeFromPoint 路径 jsdom 不支持，留待真实浏览器 e2e 覆盖。
 
 - ~~**`debugUtils` 等临时代码遗留在生产路径**~~ ✅ 落地于 commit 把内存监控 + 快捷键 + banner 收进 `import.meta.env.MODE === 'development'` 分支，prod 构建会被 Vite tree-shake；处理状态 mutex + 超时看门狗 + 全局错误兜底保留（属 service-level safety net）。
