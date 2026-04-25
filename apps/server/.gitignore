@@ -56,3 +56,6 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# 词典构建期产物（原始 ECDICT、中间 jsonl 等），上百 MB，不进 git
+/data-build

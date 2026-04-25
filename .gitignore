@@ -39,6 +39,9 @@ tsconfig.tsbuildinfo
 **/test-results/
 
 *.jsonl
+# 词典 seed 数据（30K 条，~13MB）—— 是 build 产物但属"长期数据资产"，
+# 进 git 让 deploy 可以直接 seed，不必每次先 curl ecdict.csv 再跑 build。
+!apps/server/src/data/dictionary-structured.jsonl
 dist.zip
 
 # 阅读器：用户上传的 TXT/EPUB 落盘到 apps/server/uploads/，不入仓库

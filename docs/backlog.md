@@ -77,3 +77,40 @@
   - 量化：总分 71→**100**，noise 96%→**0%**，precision 20.5→**30/30**，recall 15.5→**20/20**
 
 - ~~**`debugUtils` 等临时代码遗留在生产路径**~~ ✅ 落地于 commit 把内存监控 + 快捷键 + banner 收进 `import.meta.env.MODE === 'development'` 分支，prod 构建会被 Vite tree-shake；处理状态 mutex + 超时看门狗 + 全局错误兜底保留（属 service-level safety net）。
+
+---
+
+## apps/server — 词典数据
+
+### P0 — 核心目标硬伤
+
+- ~~**`DictionaryEntry` 表为空，每次查词都走 AI 现造**~~ ✅ 落地于 [ADR 0021](adr/0021-dictionary-data-from-ecdict.md)
+  - 位置：`apps/server/src/dictionary.controller.ts:29-45`、原本 `seed-dictionary.ts` 期待的 `dictionary-structured-60000.jsonl` 不存在
+  - 改造方式：以 ECDICT (MIT) 为底座，`scripts/build-dictionary.ts` 离线把 ecdict.csv 映射成 `dictionary-structured.jsonl`；`scripts/audit-dictionary.ts` 跑质量审计；`seed-dictionary.ts` 改幂等 (deleteMany→create)
+  - 量化：30,258 条入库；CET-4 99.84% / COCA top5k 99.77% 覆盖；100% 中英双语；P0 高频词缺中文 39 → **0**
+
+### P1 — 体验
+
+- **词典缺例句**
+  - 位置：`apps/server/src/data/dictionary-structured.jsonl`（每条 `entries[].senses[].examples = []`）
+  - 现状：ECDICT 不带例句，所有 30K 条都没例句；扩展端 `WordDefinitions.tsx:58` 已有渲染兜底但永远展示不出
+  - 改进方向：(a) 叠 [Wiktextract](https://kaikki.org/) 的 examples 字段；或 (b) 让 AI 给 CET-4 + COCA top 3k 共 ~7K 学习者高频词批量产例句一次性入库
+
+- **18 个高频缩写不在 ECDICT**：`n't / mr / tv / pm / mrs / ms / vs / mm-hmm / pc / and/or` 等
+  - 位置：`apps/server/data-build/missing-from-ecdict.txt`
+  - 改进方向：手写一份 `apps/server/src/data/dictionary-supplement.json`（~50 条），build 期叠加注入
+
+### P2 — 卫生 / 长期债务
+
+- **ECDICT 的 inflection 比 word-families v3 更全（forms disjoint=6217）**
+  - 位置：audit 报告 `formsConsistency.formsDisjoint`
+  - 现状：ECDICT 的 exchange 字段对规则复数（"abandonment → abandonments"）覆盖更广，而我们 word-families.json 用 Norvig top 30K 过滤掉了一部分合法 inflection
+  - 改进方向：rebuild-word-families v4 把 ECDICT exchange 也作为 evidence source（与 wink + Norvig 并列），让规则复数更全
+
+- **AI fallback 命中后不沉淀回 DB，下次还要再调 AI**
+  - 位置：`apps/server/src/dictionary.controller.ts:29-45`
+  - 改进方向：DB miss 调 AI 后，把 AI 结果异步写进 `DictionaryEntry`，下次直接命中
+
+- **`dictionary-structured.jsonl` 进 git 与否**
+  - 位置：`apps/server/src/data/dictionary-structured.jsonl`（约 10 MB，30,258 行）
+  - 选择：进 git → 部署 / CI 不需要重跑 build；不进 git → 仓库小，但 deploy 要先跑 build 再 seed。当前**先入仓库**（依赖 src/data/ 既有惯例：whitelist / word-families 都在 git 里）

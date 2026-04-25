@@ -5,12 +5,19 @@ import * as readline from 'readline';
 
 const prisma = new PrismaClient();
 
+/**
+ * 把 scripts/build-dictionary.ts 产出的 dictionary-structured.jsonl 灌入 Postgres。
+ *
+ * 幂等：每个 word 先 deleteMany 再 create（schema cascade 会带走 DefinitionEntry / Sense），
+ * 重复跑不会撞 unique 约束。
+ */
 async function main() {
   console.log('[START] 开始导入结构化词典数据...');
 
-  const dataPath = path.join(__dirname, 'data', 'dictionary-structured-60000.jsonl');
+  const dataPath = path.join(__dirname, 'data', 'dictionary-structured.jsonl');
   if (!fs.existsSync(dataPath)) {
     console.error(`[ERROR] 找不到数据文件: ${dataPath}`);
+    console.error(`        先跑：pnpm exec ts-node scripts/build-dictionary.ts`);
     process.exit(1);
   }
 
@@ -22,8 +29,8 @@ async function main() {
 
   let processedCount = 0;
   let errorCount = 0;
-  const batchSize = 100; // 每 100 个单词作为一个事务批次
-  let batch: any[] = [];
+  const batchSize = 100; // 每 100 个单词一个事务批次
+  let batch: Array<Promise<unknown> | any> = [];
 
   for await (const line of rl) {
     if (!line.trim()) continue;
@@ -50,11 +57,13 @@ async function main() {
         },
       };
 
+      // 幂等：删旧 → 建新（cascade 会清 DefinitionEntry / Sense）
+      batch.push(prisma.dictionaryEntry.deleteMany({ where: { word: data.word } }));
       batch.push(prisma.dictionaryEntry.create({ data: entryData }));
 
-      if (batch.length >= batchSize) {
+      if (batch.length >= batchSize * 2) {
         await prisma.$transaction(batch);
-        processedCount += batch.length;
+        processedCount += batch.length / 2;
         console.log(`已处理 ${processedCount} 个单词...`);
         batch = [];
       }
@@ -67,15 +76,14 @@ async function main() {
     }
   }
 
-  // 处理最后一批
   if (batch.length > 0) {
     await prisma.$transaction(batch);
-    processedCount += batch.length;
+    processedCount += batch.length / 2;
   }
 
   console.log(`[SUCCESS] 数据导入完成！`);
   console.log(`          - 成功导入: ${processedCount} 个单词`);
-  console.log(`   - 失败数量: ${errorCount} 个`);
+  console.log(`          - 失败数量: ${errorCount} 个`);
 }
 
 main()
