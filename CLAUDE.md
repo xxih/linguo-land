@@ -6,9 +6,8 @@
 
 pnpm workspaces + Turbo 的 monorepo：
 
-- `apps/server` — NestJS 后端，Prisma + Postgres，部署到阿里云 ECS（详见 `docs/operations.md`）
+- `apps/server` — NestJS 后端，Prisma + Postgres，部署到阿里云 ECS
 - `apps/extension` — Chrome 浏览器扩展（TypeScript + Vite + Tailwind v4 + shadcn）
-- `apps/admin` — 管理后台
 - `apps/docs` — Docusaurus 用户文档站
 - `packages/shared-types` — 跨应用共享的 TS 类型
 
@@ -25,40 +24,22 @@ pnpm workspaces + Turbo 的 monorepo：
 
 **扩展（apps/extension）里的日志必须使用 `apps/extension/src/utils/logger.ts` 中的 logger**，不要直接 `console.log` / `console.error`。
 
-## Spec-driven 开发
+### 环境变量
 
-本仓库用 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 做 spec-driven 开发。规范都落在 `openspec/` 目录：
+`apps/server` 启动时强制要求 `JWT_SECRET` 和 `JWT_REFRESH_SECRET`（否则崩溃）。新增需要 env 的功能时复用 `src/env.util.ts: requireConfig`，不要手写 `process.env.X || 'fallback'`。
 
-- `openspec/specs/<capability>/spec.md` — 每个 capability 的**当前基线** spec（用户可见行为 / API contract）
-- `openspec/changes/<change-name>/` — 一次 change proposal，`archive` 后合并回 specs
-- `openspec/changes/archive/` — 已归档的历史 change
+## 架构决策记录（ADR）
 
-### 工作流
+非 trivial 的重构、schema 变更、新架构模式落地后，写一份短 ADR：`docs/adr/NNNN-<slug>.md`，结构 **Context / Decision / Consequences**。这是本项目的主要决策档案。
 
-动一个 capability 时，用 slash commands：
+## OpenSpec（可选）
 
-- `/opsx:propose "描述"` — 创建 change proposal，AI 写 delta（ADDED / MODIFIED / REMOVED）
-- `/opsx:apply` — 把 change 翻译成代码改动
-- `/opsx:archive` — change 归档，delta 合并进主 spec
+仓库装了 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 用于 spec-driven 开发，规范在 `openspec/`。当前实践是**跳过 `/opsx:propose`**（太重），需要时直接用 `/opsx:apply` / `/opsx:archive`。
 
-### brownfield 注意
+`.claude/commands/opsx/` 和 `.claude/skills/openspec-*/` 由 `openspec init` 生成，**不要手改**。需要升级跑 `pnpm exec openspec update`。
 
-项目是边开发边补 spec 的 brownfield 状态：**第一次碰到某个 capability 时，把「当前真实行为 + 本次新增」全部写成 `ADDED`**（因为还没有 source spec 可 MODIFY）。archive 后这块才有基线，下次才能走 MODIFIED/REMOVED。
+## 部署 / 运维
 
-**不要**一次性逆向生成全部 specs —— 官方反对这种做法，会产生大量无人读的"文档化实现细节"。用到哪补哪。
-
-### 配套文件
-
-- `.claude/commands/opsx/` 和 `.claude/skills/openspec-*/` 由 `openspec init` 生成，**不要手改**。需要升级时跑 `pnpm exec openspec update`。
-
-## 运维 / 部署
-
-线上部署、发布、回滚、服务器布局、DB 位置、SSL 证书等信息 → **见 `docs/operations.md`**。
-
-数据库迁移历史（schema 从旧版升级到当前版本） → 见 `DEPLOYMENT_GUIDE.md`。
-
-## 相关
-
-- 运维手册：[`docs/operations.md`](docs/operations.md)
-- DB 升级指南：[`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md)
-- CI/CD workflow：[`.github/workflows/deploy-server.yml`](.github/workflows/deploy-server.yml)
+- CI/CD：[`.github/workflows/deploy-server.yml`](.github/workflows/deploy-server.yml)
+- DB 升级 / 迁移历史：[`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md)
+- 服务器、SSH、PM2、SSL 等敏感信息**不在仓库内**，问 owner 或看私密文档。
