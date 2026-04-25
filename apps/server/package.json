@@ -21,7 +21,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed": "node --env-file=.env --require ts-node/register src/seed.ts",
     "seed:dictionary": "node --env-file=.env --require ts-node/register src/seed-dictionary.ts",
-    "seed:tags": "node --env-file=.env --require ts-node/register src/seed-tags.ts"
+    "seed:tags": "node --env-file=.env --require ts-node/register src/seed-tags.ts",
+    "seed:documents": "node --env-file=.env --require ts-node/register src/seed-documents.ts"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",

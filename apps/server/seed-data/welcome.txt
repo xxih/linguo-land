@@ -1,0 +1,15 @@
+Welcome to LinguoLand Reader
+
+This is your first book on LinguoLand. It exists for one reason: to teach you how the reader works in three minutes.
+
+Try this. Tap any word in this paragraph. A small card will appear at the bottom of the screen with the definition, the part of speech, and an example sentence. If the word is unfamiliar, tap the heart to add it to your vocabulary. From now on the same word will be highlighted everywhere you encounter it, and your familiarity score will rise each time you see it again.
+
+The reader treats every text the same way. Whether you upload an EPUB novel, a textbook chapter, a magazine article, or a paragraph you pasted from a website, the same single tap reveals the meaning of any word, and the same heart adds it to your growing vocabulary. There is no separate flashcard app to switch into. The reading itself is the practice.
+
+Your reading position is saved automatically. Open this book on a different device and you will return to the exact sentence you were on. Your vocabulary follows you the same way. Words you save in the Chrome extension while watching a video appear instantly here, and the words you save here appear there. One brain, one vocabulary, three places where you read.
+
+A few things to try right now. Tap a word you already know and confidently mark it as known so the highlight goes away. Tap a word you almost know and watch the familiarity bar fill up. Scroll to the next paragraph and notice that the page remembers exactly where you stopped.
+
+That is everything. Upload a real book when you are ready, or paste a TXT file you already have. The vocabulary you build on the next page is the vocabulary you keep for life.
+
+Happy reading.
