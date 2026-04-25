@@ -32,25 +32,7 @@ export class VocabularyController {
   async queryWords(@Request() req, @Body() request: WordQueryRequest): Promise<WordQueryResponse> {
     const userId = req.user.id; // 从认证信息中获取用户ID
     const result = await this.vocabularyService.queryWordsStatus(request.words, userId);
-
-    // 注释掉自动添加到词库的逻辑 - 现在需要用户手动添加
-    // 异步更新遇到次数（不阻塞响应）
-    // request.words.forEach((word) => {
-    //   this.vocabularyService
-    //     .updateWordEncounter(word, userId)
-    //     .catch((err) =>
-    //       console.error(`Failed to update encounter for word: ${word}`, err),
-    //     );
-    // });
-
     return result;
-  }
-
-  @Post('seed')
-  async seedSampleData(@Request() req): Promise<{ message: string }> {
-    const userId = req.user.id;
-    await this.vocabularyService.seedSampleData(userId);
-    return { message: 'Sample data seeded successfully' };
   }
 
   // 通用的预设词库添加接口
@@ -253,36 +235,5 @@ export class VocabularyController {
   ): Promise<string[]> {
     const userId = req.user.id;
     return this.vocabularyService.getWordsInFamily(familyRoot, userId);
-  }
-
-  // 词族管理：从词族中移除单词
-  @Post('word/:wordText/remove')
-  async removeWordFromFamily(
-    @Request() req,
-    @Param('wordText') wordText: string,
-  ): Promise<{ success: boolean; message: string }> {
-    const userId = req.user.id;
-    return this.vocabularyService.removeWordFromFamily(wordText, userId);
-  }
-
-  // 词族管理：将单词移动到另一个词族
-  @Post('word/:wordText/move')
-  async moveWordToFamily(
-    @Request() req,
-    @Param('wordText') wordText: string,
-    @Body() body: { newFamilyRoot: string },
-  ): Promise<{ success: boolean; message: string }> {
-    const userId = req.user.id;
-    return this.vocabularyService.moveWordToFamily(wordText, body.newFamilyRoot, userId);
-  }
-
-  // 词族管理：从单个单词创建新词族
-  @Post('word/:wordText/create-family')
-  async createFamilyFromWord(
-    @Request() req,
-    @Param('wordText') wordText: string,
-  ): Promise<{ success: boolean; message: string; familyRoot?: string }> {
-    const userId = req.user.id;
-    return this.vocabularyService.createFamilyFromWord(wordText, userId);
   }
 }

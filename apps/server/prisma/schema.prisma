@@ -94,26 +94,6 @@ model Tag {
   @@map("tags")
 }
 
-// ------------------- 保留旧表用于迁移（可选）-------------------
-
-// 旧的用户词汇表 - 迁移后可以删除
-model UserVocabulary {
-  id               Int                     @id @default(autoincrement())
-  userId           String                  @default("default")
-  word             String
-  status           WordFamiliarityStatus   @default(UNKNOWN)
-  familiarityLevel Int                     @default(0) @db.SmallInt
-  lookupCount      Int                     @default(0) // 查词次数（显示wordCard的次数）
-  lastSeenAt       DateTime?
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
-  importSource     String?
-
-  @@unique([userId, word])
-  @@index([userId, importSource])
-  @@map("user_vocabulary")
-}
-
 enum WordFamiliarityStatus {
   UNKNOWN
   LEARNING
