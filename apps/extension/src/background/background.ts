@@ -1,5 +1,6 @@
 import type { ChromeMessage } from 'shared-types';
 import { MessageHandlers } from './messageHandlers';
+import { VocabularyMirror } from './vocabularyMirror';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('BackgroundScript');
@@ -129,6 +130,33 @@ chrome.runtime.onMessage.addListener((message: ChromeMessage, sender, sendRespon
 // 监听扩展启动事件
 chrome.runtime.onStartup.addListener(() => {
   logger.info('Extension startup');
+  // service worker 重启时镜像也要重新加载（init 已经幂等）
+  VocabularyMirror.getInstance()
+    .init()
+    .catch((err) => logger.error('Failed to init vocabulary mirror on startup', err as Error));
+});
+
+// 监听认证状态变化——登录后触发同步、登出时清空镜像
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local') return;
+  if (!changes.accessToken) return;
+
+  const mirror = VocabularyMirror.getInstance();
+  const { newValue, oldValue } = changes.accessToken;
+
+  if (newValue && !oldValue) {
+    // 登录：拉取最新词库
+    logger.info('Login detected, syncing vocabulary mirror');
+    mirror.syncFromRemote().catch((err) => {
+      logger.error('Failed to sync mirror after login', err as Error);
+    });
+  } else if (!newValue && oldValue) {
+    // 登出：清空本地镜像
+    logger.info('Logout detected, clearing vocabulary mirror');
+    mirror.clear().catch((err) => {
+      logger.error('Failed to clear mirror on logout', err as Error);
+    });
+  }
 });
 
 // 监听标签页更新事件（可选，用于未来功能）

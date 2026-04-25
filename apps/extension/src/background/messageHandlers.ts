@@ -1,16 +1,18 @@
 import type {
+  AIEnrichmentData,
   ChromeMessage,
   ChromeMessageResponse,
   WordDetails,
   WordFamiliarityStatus,
+  WordMutationResponse,
   WordQueryResponse,
-  AIEnrichmentData,
 } from 'shared-types';
 import { VocabularyApi } from './api/vocabularyApi';
 import { DictionaryService } from './api/dictionaryApi';
 import { ResponseHandler } from './utils/responseHandler';
 import { Logger } from '../utils/logger';
 import { fetchJsonWithAuth } from './api/fetchWithAuth';
+import { VocabularyMirror } from './vocabularyMirror';
 
 /**
  * Chrome消息处理器
@@ -19,20 +21,27 @@ import { fetchJsonWithAuth } from './api/fetchWithAuth';
 export class MessageHandlers {
   private vocabularyApi: VocabularyApi;
   private dictionaryService: DictionaryService;
+  private mirror: VocabularyMirror;
   private logger: Logger;
 
   constructor() {
     this.vocabularyApi = new VocabularyApi();
     this.dictionaryService = new DictionaryService();
+    this.mirror = VocabularyMirror.getInstance();
     this.logger = new Logger('MessageHandlers');
+
+    // 后台启动时即拉取本地镜像（先 storage 兜底，再后台异步 sync）
+    this.mirror.init().catch((err) => {
+      this.logger.error('Failed to initialize vocabulary mirror', err as Error);
+    });
   }
 
   /**
-   * 处理词汇状态查询
+   * 词汇状态查询——纯本地镜像查询，不再走网络。
+   * 镜像里没有的 lemma 视为 unknown（与原行为一致——未返回的 lemma 即 unknown）。
    */
-  async handleQueryWordsStatus(words: string[]): Promise<WordQueryResponse> {
-    this.logger.debug('Handling query words status', { wordCount: words.length });
-    return await this.vocabularyApi.queryWordsStatus(words);
+  handleQueryWordsStatus(words: string[]): WordQueryResponse {
+    return this.mirror.query(words);
   }
 
   /**
@@ -52,23 +61,30 @@ export class MessageHandlers {
   }
 
   /**
-   * 处理更新单词状态
+   * 处理更新单词状态——后端写入成功后立刻把镜像同步到位。
    */
   async handleUpdateWordStatus(
     word: string,
     status: WordFamiliarityStatus,
     familiarityLevel?: number,
-  ): Promise<{ success: boolean; message: string }> {
-    this.logger.debug('Handling update word status', {
-      word,
-      status,
-      familiarityLevel,
-    });
-
-    // ✨ 新增逻辑：如果单词状态从 "ignored" 改变，先从忽略列表中移除
+  ): Promise<WordMutationResponse> {
+    // 状态从 "ignored" 改变时，先从忽略列表中移除
     await this.removeFromIgnoredList(word);
 
-    return await this.vocabularyApi.updateWordStatus(word, status, familiarityLevel);
+    const result = await this.vocabularyApi.updateWordStatus(word, status, familiarityLevel);
+    await this.applyMutationToMirror(result);
+    return result;
+  }
+
+  /**
+   * 把 mutation 响应里的 family / removedFamilyRoot 同步到本地镜像。
+   */
+  private async applyMutationToMirror(result: WordMutationResponse): Promise<void> {
+    if (result.family) {
+      await this.mirror.applyFamily(result.family);
+    } else if (result.removedFamilyRoot) {
+      await this.mirror.applyFamily(null, result.removedFamilyRoot);
+    }
   }
 
   /**
@@ -170,27 +186,22 @@ export class MessageHandlers {
   }
 
   /**
-   * 批量更新单词状态
+   * 批量更新单词状态——并行调后端，每条成功的写入都同步到镜像。
    */
   async handleBatchUpdateWordStatus(
     words: string[],
     status: WordFamiliarityStatus,
     familiarityLevel?: number,
   ): Promise<{ success: boolean; message: string; updatedCount: number }> {
-    this.logger.debug('Handling batch update word status', {
-      count: words.length,
-      status,
-    });
-
     try {
       let updatedCount = 0;
-      // 逐个更新，但使用 Promise.all 并行处理
       await Promise.all(
         words.map((word) =>
           this.vocabularyApi
             .updateWordStatus(word, status, familiarityLevel)
-            .then(() => {
+            .then(async (result) => {
               updatedCount++;
+              await this.applyMutationToMirror(result);
               return true;
             })
             .catch((error) => {
@@ -661,13 +672,12 @@ export class MessageHandlers {
 
     try {
       switch (message.type) {
-        case 'QUERY_WORDS_STATUS':
-          // 异步处理，立即返回 true
-          ResponseHandler.handleAsyncMessage(
-            () => this.handleQueryWordsStatus(message.words!),
-            sendResponse,
-          );
-          return true;
+        case 'QUERY_WORDS_STATUS': {
+          // 走本地镜像，同步返回——不再有网络请求
+          const result = this.handleQueryWordsStatus(message.words!);
+          sendResponse(ResponseHandler.createSuccessResponse(result));
+          return false;
+        }
 
         case 'GET_WORD_DETAILS':
           // 保留用于向后兼容
@@ -754,29 +764,18 @@ export class MessageHandlers {
           return true;
 
         case 'AUTO_INCREASE_FAMILIARITY':
-          // 自动提升熟练度
-          this.logger.debug(
-            '[MessageHandlers] 收到 AUTO_INCREASE_FAMILIARITY 消息, 词元: ' + message.word,
-          );
+          // 自动提升熟练度——后端返回 family，直接同步到镜像并通知 content script
           ResponseHandler.handleAsyncMessage(async () => {
-            this.logger.debug('[MessageHandlers] 开始处理自动提升熟练度请求');
             const result = await this.vocabularyApi.autoIncreaseFamiliarity(message.word!);
-            this.logger.debug(
-              '[MessageHandlers] 自动提升熟练度处理完成: ' + JSON.stringify(result),
-            );
+            await this.applyMutationToMirror(result);
 
-            // 如果成功提升了熟练度，通知content script更新UI
-            if (result.success) {
-              // 获取更新后的完整单词信息
-              const updatedWordInfo = await this.vocabularyApi.queryWordsStatus([message.word!]);
-              if (updatedWordInfo && updatedWordInfo[message.word!]) {
-                this.notifyContentScriptUpdate(
-                  sender,
-                  message.word!,
-                  updatedWordInfo[message.word!].status as WordFamiliarityStatus,
-                  updatedWordInfo[message.word!].familiarityLevel,
-                );
-              }
+            if (result.success && result.family) {
+              this.notifyContentScriptUpdate(
+                sender,
+                message.word!,
+                result.family.status,
+                result.family.familiarityLevel,
+              );
             }
 
             return result;
