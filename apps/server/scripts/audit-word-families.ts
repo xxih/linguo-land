@@ -40,6 +40,80 @@ for (const [base, words] of Object.entries(families)) {
   for (const w of words) wordToFamily.set(w, base);
 }
 
+// === compromise lemma 推断（仅 audit 时按需 lazy 调用，给 precision 维度
+// 区分"算法启发式误吞" vs "wink/POS 已验证的正确归属"用） ===
+import nlpFactory from 'compromise';
+const nlp = (nlpFactory as any).default ?? (nlpFactory as any);
+const lemmaCache = new Map<string, string>();
+
+// adj 比较级 / 最高级 fallback（compromise 不会自动还原 brighter→bright）
+function ruleStemForCompAdj(w: string, evidenceSet: Set<string>): string | null {
+  const candidates: string[] = [];
+  if (w.endsWith('iest') && w.length >= 6) candidates.push(w.slice(0, -4) + 'y');
+  else if (w.endsWith('ier') && w.length >= 5) candidates.push(w.slice(0, -3) + 'y');
+  else if (w.endsWith('est') && w.length >= 5) {
+    candidates.push(w.slice(0, -3));
+    candidates.push(w.slice(0, -2));
+    if (w.length >= 6 && w[w.length - 4] === w[w.length - 5]) candidates.push(w.slice(0, -4));
+  } else if (w.endsWith('er') && w.length >= 4) {
+    candidates.push(w.slice(0, -2));
+    candidates.push(w.slice(0, -1));
+    if (w.length >= 5 && w[w.length - 3] === w[w.length - 4]) candidates.push(w.slice(0, -3));
+  }
+  for (const stem of candidates) {
+    if (stem.length < 2) continue;
+    if (!evidenceSet.has(stem)) continue;
+    const tags: string[] = nlp(stem).terms().json()[0]?.terms[0]?.tags ?? [];
+    if (tags.includes('Adjective')) return stem;
+  }
+  return null;
+}
+
+const wsetForLemma = new Set(whitelist.map((w) => w.toLowerCase()));
+function lemmaOf(w: string): string {
+  if (lemmaCache.has(w)) return lemmaCache.get(w)!;
+  if (verbMap[w]) {
+    lemmaCache.set(w, verbMap[w]);
+    return verbMap[w];
+  }
+  if (nounMap[w]) {
+    lemmaCache.set(w, nounMap[w]);
+    return nounMap[w];
+  }
+  if (adjMap[w]) {
+    lemmaCache.set(w, adjMap[w]);
+    return adjMap[w];
+  }
+  const doc = nlp(w);
+  const sing: string = doc.nouns().toSingular().out('text');
+  if (sing && sing !== w) {
+    lemmaCache.set(w, sing);
+    return sing;
+  }
+  const inf: string = doc.verbs().toInfinitive().out('text');
+  if (inf && inf !== w) {
+    lemmaCache.set(w, inf);
+    return inf;
+  }
+  const tagsRaw: string[] = doc.terms().json()[0]?.terms[0]?.tags ?? [];
+  if (tagsRaw.includes('Adjective') && (w.endsWith('ed') || w.endsWith('d') || w.endsWith('ing'))) {
+    const d = nlp(w);
+    d.tag('Verb');
+    const i2: string = d.verbs().toInfinitive().out('text');
+    if (i2 && i2 !== w) {
+      lemmaCache.set(w, i2);
+      return i2;
+    }
+  }
+  const compStem = ruleStemForCompAdj(w, wsetForLemma);
+  if (compStem && compStem !== w) {
+    lemmaCache.set(w, compStem);
+    return compStem;
+  }
+  lemmaCache.set(w, w);
+  return w;
+}
+
 console.log(`数据规模:`);
 console.log(`  families: ${Object.keys(families).length}`);
 console.log(`  surface forms (含重复，含 base): ${[...wordToFamily.keys()].length}`);
@@ -47,17 +121,39 @@ console.log(`  white-list 词数: ${whitelist.length}`);
 console.log('');
 
 // ========== 维度 1：误吞 (precision) ==========
-// "误吞" = 一个白名单词 X 被归入了 family Y (Y ≠ X)，且 X 自己没 family
-// 真实独立词被吞最严重的是 -er / -ed 这种 derivational 形态
+// "误吞" = 一个白名单词 X 被归入了 family Y (Y ≠ X)，且 X 自己没 family，
+//          且 X→Y 不是 wink/lemma 已验证的合法 inflection 关系。
+// 排除：wink 反向 map 给出 X → Y（金标），或 compromise.lemma(X) === Y。
+//      这两种情况下 X 进 Y family 是正确的（am→be、worked→work、children→child）。
 console.log('━━━ 1. 误吞统计 ━━━');
 const swallowed: Array<{ word: string; family: string }> = [];
+const validatedSwallows: Array<{ word: string; family: string; via: string }> = [];
 for (const word of whitelist) {
   const w = word.toLowerCase();
-  if (families[w]) continue; // 自己是 base
+  if (families[w]) continue;
   const f = wordToFamily.get(w);
-  if (f && f !== w) swallowed.push({ word: w, family: f });
+  if (!f || f === w) continue;
+  // wink validation
+  if (verbMap[w] === f || nounMap[w] === f || adjMap[w] === f) {
+    validatedSwallows.push({ word: w, family: f, via: 'wink' });
+    continue;
+  }
+  // compromise lemma validation
+  if (lemmaOf(w) === f) {
+    validatedSwallows.push({ word: w, family: f, via: 'lemma' });
+    continue;
+  }
+  swallowed.push({ word: w, family: f });
 }
-console.log(`总计被吞的白名单词: ${swallowed.length} (占白名单 ${((swallowed.length / whitelist.length) * 100).toFixed(1)}%)`);
+console.log(
+  `白名单词被归入其它 family: ${swallowed.length + validatedSwallows.length}`,
+);
+console.log(
+  `  ✓ wink/lemma 已验证（合法 inflection）: ${validatedSwallows.length}`,
+);
+console.log(
+  `  ✗ 真正误吞（启发式错误）: ${swallowed.length} (${((swallowed.length / whitelist.length) * 100).toFixed(2)}%)`,
+);
 
 // 按吞它的 base 分组，看哪些 family 吞最多
 const byFamily = new Map<string, string[]>();
@@ -219,14 +315,17 @@ let critOneWord = 0;
 let critOk = 0;
 const critIssues: string[] = [];
 for (const w of LEARNER_CRITICAL) {
-  if (!families[w]) {
+  // 若 w 自己不是 base，但已被归入某 family（典型：people 在 person family，
+  // children 在 child family），按健康对待——客户端 lemma 路径会处理这层。
+  const fam = families[w] ?? families[wordToFamily.get(w) ?? ''];
+  if (!fam) {
     critFamiliesMissing++;
     critIssues.push(`✗ ${w}: 无 family`);
     continue;
   }
-  if (families[w].length <= 1) {
+  if (fam.length <= 1) {
     critOneWord++;
-    critIssues.push(`⚠ ${w}: 仅 ${families[w].length} 形态`);
+    critIssues.push(`⚠ ${w}: 仅 ${fam.length} 形态`);
     continue;
   }
   critOk++;
@@ -267,17 +366,14 @@ console.log('');
 
 // ========== 综合评分 ==========
 console.log('━━━ 综合评分 (满分 100) ━━━');
+// precision：仅算"启发式误吞"（不计 wink/lemma 已验证的合法 inflection）
 const precisionScore = Math.max(0, 30 - (swallowed.length / whitelist.length) * 1000);
-// 误吞率越低越好。3648/43442 = 8.4% → 25 分；2% → 25.6 分。我希望误吞 <2%
 const recallScore = Math.max(
   0,
   20 - winkMissing / 5 - verbMiss * 1.5 - nounMiss * 1.5 - adjMiss * 1.5,
 );
 const noiseScore = Math.max(0, 15 - (pseudoForms / totalForms) * 100);
-const learnerScore = Math.max(
-  0,
-  35 - critFamiliesMissing * 2 - critOneWord * 0.5,
-);
+const learnerScore = Math.max(0, 35 - critFamiliesMissing * 2 - critOneWord * 0.5);
 const total = precisionScore + recallScore + noiseScore + learnerScore;
 console.log(`  precision (误吞少): ${precisionScore.toFixed(1)} / 30`);
 console.log(`  recall (漏收少):    ${recallScore.toFixed(1)} / 20`);

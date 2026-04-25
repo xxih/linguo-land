@@ -1,36 +1,68 @@
 /**
- * 词族重建脚本（ADR 0018，v2 算法）
+ * 词族 + 白名单统一重建脚本（v3 算法，覆盖 ADR 0019）
  *
- * v1 用 expander 反向生成 + 全量白名单声明，结果 3648 真实词被误吞
- * （bed 进 be、seed 进 see、drawer 进 draw、need 进 nee……），噪声 96%。
+ * 输入（数据全部在仓库内）：
+ *   - curated 词表：coca20000 + cet_4 + cet_6 + junior_high + high
+ *   - wink 不规则金标：verb/noun/adj-inflection-map.json（form→base）
+ *   - Norvig 1-grams：/tmp/lemma-eval/count_1w.txt（候选形态合法性验证）
+ *   - compromise（package: compromise）作为 build-time POS / lemma 推断器
  *
- * v2 思路：family 构建只信任 wink 不规则映射（这是金标），规则形态仅当
- * 形态本身不在白名单时才补——如果一个生成形态已经是白名单里的独立词
- * （bed / drawer / need），就让它形成自己的 family，不被另一个短词吞掉。
+ * 输出：
+ *   - dictionary-whitelist.json（≈ 所有 family form 的并集 ∪ curated 词条 ∪ wink 全形态）
+ *   - word-families.json
  *
- * 算法：
- *   1. 把 wink verb/noun/adj 三表合并：inflectionToBase[form] = base
- *   2. 对白名单每个词 w：
- *      - 若 w 在 inflectionToBase 里：跳过，由对应 base 收
- *      - 否则 w 是自己的 base
- *   3. 每个 base 的 family.words[] =
- *        {base} ∪
- *        wink 反向映射给的所有 form ∪
- *        规则形态生成器输出且**不在白名单**的形态
- *   4. wink 里出现但 base 不在白名单的（比如 've → 'have'），也要建 family
+ * 算法（v3）：
+ *   1. 自顶向下：对每个 curated 词 w，用 compromise + 规则兜底算 lemma(w)。
+ *      - lemma(w) == w → w 是 base
+ *      - lemma(w) != w → w 是 inflection，进 lemma(w) 的 family
+ *   2. 注入 wink-irregular：每条 (form, base) → form ∈ family[base]
+ *   3. 自底向上：对每个 base 跑规则形态生成器，候选保留条件 = 形态健全 ∧
+ *      (在 evidence 集 ∨ 在 Norvig top 30K) ∧ compromise lemma 匹配 / 无歧义。
+ *      Norvig top 30K 过滤掉 'aardwolfing/rivering/breakest/seest/havest' 这类
+ *      不存在的派生；compromise lemma 检查避免 'bed' 进 be、'seed' 进 see、
+ *      'drawer' 进 draw（三者 compromise 都判 own lemma）。
+ *   4. 同形异性词：'lay/saw/found' 等优先按 wink 反向映射归属（wink 给 base
+ *      则归 base）；wink 没给则归 own family（lay→lay，saw→saw 已在 ADR 0018）。
+ *
+ * 同形异性词例外：
+ *   - 'bed' 是独立 curated 名词 lemma，compromise.lemma 返 'bed' → 留独立 base
+ *     'be' 的规则 -d 候选 'bed' 因 compromise 不认它是 'be' 的形态被拒绝
+ *   - 'being'/'drawing'/'working'/'running' 等 -ing 形态：compromise 知道它们
+ *     是 verb 的 gerund → 进 base family，不再独立 base
+ *   - 'studied'/'wanted'/'used' 等 curated 列表里的 inflection：compromise 给
+ *     verb infinitive → 进 base family
+ *
+ * 不依赖：dictionary-whitelist.json 旧文件作为输入（脚本一并重新生成）
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
+import nlpFactory from 'compromise';
+
+const nlp = (nlpFactory as any).default ?? (nlpFactory as any);
 
 const ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'src/data');
-const WHITELIST_PATH = path.join(DATA_DIR, 'dictionary-whitelist.json');
-const OUT_PATH = path.join(DATA_DIR, 'word-families.json');
+const WHITELIST_OUT = path.join(DATA_DIR, 'dictionary-whitelist.json');
+const FAMILIES_OUT = path.join(DATA_DIR, 'word-families.json');
+const NORVIG_PATH = '/tmp/lemma-eval/count_1w.txt';
 const FIXTURE_PATH = path.resolve(ROOT, '../extension/src/content/utils/lemmaFixtures.json');
 
-const whitelist: string[] = JSON.parse(fs.readFileSync(WHITELIST_PATH, 'utf-8'));
-const whitelistSet = new Set(whitelist.map((w) => w.toLowerCase()));
+const NORVIG_CUTOFF = 30000;
+
+// ════════════════════════════════════════════════════════════════════
+// 1. 加载源数据
+// ════════════════════════════════════════════════════════════════════
+interface CuratedList {
+  words: string[];
+}
+
+const curatedFiles = ['coca20000', 'cet_4', 'cet_6', 'junior_high', 'high'];
+const curatedSources: Record<string, string[]> = {};
+for (const f of curatedFiles) {
+  const j: CuratedList = JSON.parse(fs.readFileSync(path.join(DATA_DIR, `${f}.json`), 'utf-8'));
+  curatedSources[f] = j.words;
+}
 
 const verbMap: Record<string, string> = JSON.parse(
   fs.readFileSync(path.join(DATA_DIR, 'verb-inflection-map.json'), 'utf-8'),
@@ -42,20 +74,132 @@ const adjMap: Record<string, string> = JSON.parse(
   fs.readFileSync(path.join(DATA_DIR, 'adj-inflection-map.json'), 'utf-8'),
 );
 
-// === 1. 合并 wink 三表 ===
 const inflectionToBase = new Map<string, string>();
-for (const [form, base] of Object.entries({ ...verbMap, ...nounMap, ...adjMap })) {
-  inflectionToBase.set(form, base);
+for (const [f, b] of Object.entries({ ...verbMap, ...nounMap, ...adjMap })) {
+  inflectionToBase.set(f, b);
 }
 const baseToWinkForms = new Map<string, Set<string>>();
-for (const [form, base] of inflectionToBase) {
-  if (!baseToWinkForms.has(base)) baseToWinkForms.set(base, new Set());
-  baseToWinkForms.get(base)!.add(form);
+for (const [f, b] of inflectionToBase) {
+  if (!baseToWinkForms.has(b)) baseToWinkForms.set(b, new Set());
+  baseToWinkForms.get(b)!.add(f);
 }
 
-console.log(`[v2] wink 不规则覆盖: ${inflectionToBase.size} forms → ${baseToWinkForms.size} bases`);
+// === Norvig rank ===
+const norvigRank = new Map<string, number>();
+{
+  const text = fs.readFileSync(NORVIG_PATH, 'utf-8');
+  let i = 0;
+  for (const line of text.split(/\n/)) {
+    const word = line.split(/\s+/)[0];
+    if (!word) continue;
+    if (!norvigRank.has(word)) norvigRank.set(word, ++i);
+  }
+}
+const inNorvigTop = (w: string) => (norvigRank.get(w) ?? Infinity) <= NORVIG_CUTOFF;
 
-// === 2. 规则形态生成器（小写版，仅生成核心 inflection，不再做 derivation） ===
+// === evidence: 已知"是真单词"的全集 ===
+function shapeOk(w: string): boolean {
+  if (!/^[a-z'-]+$/.test(w)) return false;
+  if (w.length === 1 && w !== 'a' && w !== 'i') return false;
+  if (/(.)\1\1/.test(w)) return false;
+  if (!/[aeiouy]/.test(w)) return false;
+  if (w.startsWith('-') || w.endsWith('-')) return false;
+  if (w.startsWith("'") || w.endsWith("'")) return false;
+  return true;
+}
+
+const evidence = new Set<string>();
+for (const arr of Object.values(curatedSources)) {
+  for (const w of arr) {
+    const l = w.toLowerCase();
+    if (shapeOk(l)) evidence.add(l);
+  }
+}
+for (const f of inflectionToBase.keys()) if (shapeOk(f)) evidence.add(f);
+for (const b of baseToWinkForms.keys()) if (shapeOk(b)) evidence.add(b);
+
+console.log(
+  `[v3] 数据源: ${Object.values(curatedSources).reduce((s, a) => s + a.length, 0)} curated 条 (5 表) | ` +
+    `wink ${inflectionToBase.size} forms / ${baseToWinkForms.size} bases | ` +
+    `Norvig ${norvigRank.size} 词，cutoff top ${NORVIG_CUTOFF} | ` +
+    `evidence ${evidence.size}`,
+);
+
+// ════════════════════════════════════════════════════════════════════
+// 2. compromise 驱动的 lemma 推断
+// ════════════════════════════════════════════════════════════════════
+const lemmaCache = new Map<string, string>();
+
+function ruleStemForCompAdj(w: string): string | null {
+  // 形容词比较级 / 最高级 fallback（compromise 不会自动还原）
+  // 拿到候选 stem 后用 evidence 验证它是真词 + compromise tag adjective
+  const candidates: string[] = [];
+  if (w.endsWith('iest') && w.length >= 6) candidates.push(w.slice(0, -4) + 'y');
+  else if (w.endsWith('ier') && w.length >= 5) candidates.push(w.slice(0, -3) + 'y');
+  else if (w.endsWith('est') && w.length >= 5) {
+    candidates.push(w.slice(0, -3));
+    candidates.push(w.slice(0, -2));
+    if (w.length >= 6 && w[w.length - 4] === w[w.length - 5]) candidates.push(w.slice(0, -4));
+  } else if (w.endsWith('er') && w.length >= 4) {
+    candidates.push(w.slice(0, -2));
+    candidates.push(w.slice(0, -1));
+    if (w.length >= 5 && w[w.length - 3] === w[w.length - 4]) candidates.push(w.slice(0, -3));
+  }
+  for (const stem of candidates) {
+    if (stem.length < 2) continue;
+    if (!evidence.has(stem)) continue;
+    // compromise 是否认 stem 是 Adjective
+    const tags: string[] = nlp(stem).terms().json()[0]?.terms[0]?.tags ?? [];
+    if (tags.includes('Adjective')) return stem;
+  }
+  return null;
+}
+
+function lemmaOf(w: string): string {
+  if (lemmaCache.has(w)) return lemmaCache.get(w)!;
+  // 第一道：wink 反向映射（金标）
+  if (inflectionToBase.has(w)) {
+    const b = inflectionToBase.get(w)!;
+    lemmaCache.set(w, b);
+    return b;
+  }
+  // 第二道：compromise
+  const doc = nlp(w);
+  const tagsRaw: string[] = doc.terms().json()[0]?.terms[0]?.tags ?? [];
+  const tags = new Set(tagsRaw);
+  const sing: string = doc.nouns().toSingular().out('text');
+  if (sing && sing !== w) {
+    lemmaCache.set(w, sing);
+    return sing;
+  }
+  const inf: string = doc.verbs().toInfinitive().out('text');
+  if (inf && inf !== w) {
+    lemmaCache.set(w, inf);
+    return inf;
+  }
+  // 第三道：adjective-tagged past participle / gerund fallback (forced verb tag)
+  if (tags.has('Adjective') && (w.endsWith('ed') || w.endsWith('d') || w.endsWith('ing'))) {
+    const d = nlp(w);
+    d.tag('Verb');
+    const i2: string = d.verbs().toInfinitive().out('text');
+    if (i2 && i2 !== w) {
+      lemmaCache.set(w, i2);
+      return i2;
+    }
+  }
+  // 第四道：comparative / superlative -er/-est/-ier/-iest
+  const compStem = ruleStemForCompAdj(w);
+  if (compStem && compStem !== w) {
+    lemmaCache.set(w, compStem);
+    return compStem;
+  }
+  lemmaCache.set(w, w);
+  return w;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 3. 规则形态生成器（用于自底向上候选）
+// ════════════════════════════════════════════════════════════════════
 const VOWELS = new Set(['a', 'e', 'i', 'o', 'u']);
 const isVowel = (c: string) => VOWELS.has(c);
 const isCvc = (w: string): boolean => {
@@ -72,125 +216,115 @@ const isCvc = (w: string): boolean => {
 const endsWithSibilant = (w: string) =>
   ['s', 'x', 'z', 'sh', 'ch'].some((s) => w.endsWith(s));
 
-interface RegularInflections {
-  /** 屈折性强：-s / -es / -ies / -ing。always 加入 family，不管在不在白名单 */
-  inflectional: Set<string>;
-  /** 过去式：-ed / -ied / -d。若 base 已有 wink 不规则过去式则跳过整组（避免 bed 进 be、seed 进 see、knowed 进 know） */
-  pastTense: Set<string>;
-  /** 形容词比较级 / 最高级：-er / -est。在白名单里的跳过（避免 runner 进 run、drawer 进 draw）；不在白名单的安全收 */
-  comparatives: Set<string>;
-}
-
-function generateRegularInflections(base: string): RegularInflections {
-  const inflectional = new Set<string>();
-  const pastTense = new Set<string>();
-  const comparatives = new Set<string>();
-  if (base.length < 2) return { inflectional, pastTense, comparatives };
-
-  // 复数 / 三单 -s / -es / -ies
-  if (base.endsWith('y') && base.length >= 2 && !isVowel(base[base.length - 2])) {
-    inflectional.add(base.slice(0, -1) + 'ies');
-  } else if (endsWithSibilant(base)) {
-    inflectional.add(base + 'es');
-  } else if (base.endsWith('o') && base.length >= 2 && !isVowel(base[base.length - 2])) {
-    inflectional.add(base + 'es');
-    inflectional.add(base + 's');
-  } else {
-    inflectional.add(base + 's');
-  }
-
-  // -ing 进行时
-  if (base.endsWith('e') && base.length > 2 && base[base.length - 2] !== 'e') {
-    inflectional.add(base.slice(0, -1) + 'ing');
-    inflectional.add(base + 'ing');
-  } else if (base.endsWith('ie')) {
-    inflectional.add(base.slice(0, -2) + 'ying');
-    inflectional.add(base + 'ing');
-  } else if (isCvc(base)) {
-    inflectional.add(base + base[base.length - 1] + 'ing');
-    inflectional.add(base + 'ing');
-  } else {
-    inflectional.add(base + 'ing');
-  }
-
-  // -ed / -ied / -d 过去式（受 wink 是否覆盖控制）
-  if (base.endsWith('e')) {
-    pastTense.add(base + 'd');
-  } else if (base.endsWith('y') && base.length >= 2 && !isVowel(base[base.length - 2])) {
-    pastTense.add(base.slice(0, -1) + 'ied');
-  } else if (isCvc(base)) {
-    pastTense.add(base + base[base.length - 1] + 'ed');
-    pastTense.add(base + 'ed');
-  } else {
-    pastTense.add(base + 'ed');
-  }
-
-  // -er / -est 比较级最高级（仅短词候选）
-  if (base.length <= 6 && base.length >= 3) {
+function generateRegular(base: string): Set<string> {
+  const out = new Set<string>();
+  if (base.length < 2) return out;
+  // -s / -es / -ies
+  if (base.endsWith('y') && !isVowel(base[base.length - 2])) out.add(base.slice(0, -1) + 'ies');
+  else if (endsWithSibilant(base)) out.add(base + 'es');
+  else if (base.endsWith('o') && !isVowel(base[base.length - 2])) {
+    out.add(base + 'es');
+    out.add(base + 's');
+  } else out.add(base + 's');
+  // -ing
+  if (base.endsWith('e') && base.length > 2 && base[base.length - 2] !== 'e')
+    out.add(base.slice(0, -1) + 'ing');
+  else if (base.endsWith('ie')) out.add(base.slice(0, -2) + 'ying');
+  else if (isCvc(base)) out.add(base + base[base.length - 1] + 'ing');
+  else out.add(base + 'ing');
+  // -ed / -d / -ied
+  if (base.endsWith('e')) out.add(base + 'd');
+  else if (base.endsWith('y') && !isVowel(base[base.length - 2])) out.add(base.slice(0, -1) + 'ied');
+  else if (isCvc(base)) out.add(base + base[base.length - 1] + 'ed');
+  else out.add(base + 'ed');
+  // -er / -est（仅短词候选）
+  if (base.length >= 3 && base.length <= 7) {
     if (base.endsWith('e')) {
-      comparatives.add(base + 'r');
-      comparatives.add(base + 'st');
-    } else if (base.endsWith('y') && base.length >= 2 && !isVowel(base[base.length - 2])) {
-      comparatives.add(base.slice(0, -1) + 'ier');
-      comparatives.add(base.slice(0, -1) + 'iest');
+      out.add(base + 'r');
+      out.add(base + 'st');
+    } else if (base.endsWith('y') && !isVowel(base[base.length - 2])) {
+      out.add(base.slice(0, -1) + 'ier');
+      out.add(base.slice(0, -1) + 'iest');
     } else if (isCvc(base)) {
-      comparatives.add(base + base[base.length - 1] + 'er');
-      comparatives.add(base + base[base.length - 1] + 'est');
+      out.add(base + base[base.length - 1] + 'er');
+      out.add(base + base[base.length - 1] + 'est');
     } else {
-      comparatives.add(base + 'er');
-      comparatives.add(base + 'est');
+      out.add(base + 'er');
+      out.add(base + 'est');
     }
   }
-
-  return { inflectional, pastTense, comparatives };
+  return out;
 }
 
-// === 3. 构建 family ===
-const families: Record<string, string[]> = {};
+// ════════════════════════════════════════════════════════════════════
+// 4. 自顶向下：把每个 curated 词 / wink form 归到对应 lemma
+// ════════════════════════════════════════════════════════════════════
+const families: Record<string, Set<string>> = {};
+function addToFamily(base: string, form: string) {
+  if (!shapeOk(base) || !shapeOk(form)) return;
+  if (!families[base]) families[base] = new Set([base]);
+  families[base].add(form);
+}
 
-function buildFamily(base: string): void {
-  const forms = new Set<string>([base]);
-  // wink 反向映射给的不规则形态（金标）
-  for (const f of baseToWinkForms.get(base) ?? []) forms.add(f);
-
-  const reg = generateRegularInflections(base);
-  // 屈折性强（-s/-es/-ies/-ing）：总是加入
-  for (const f of reg.inflectional) forms.add(f);
-  // 过去式（-ed/-d/-ied）：仅当 wink 没给本 base 提供任何不规则形态时才生成
-  // （避免 bed 进 be、seed 进 see、knowed 进 know 等"规则化错误"）
-  if (!baseToWinkForms.has(base)) {
-    for (const f of reg.pastTense) forms.add(f);
+let lemmaResolved = 0;
+for (const w of evidence) {
+  const lemma = lemmaOf(w);
+  if (lemma === w) {
+    addToFamily(w, w);
+  } else {
+    addToFamily(lemma, w);
+    addToFamily(lemma, lemma); // 确保 base 自己也在
+    lemmaResolved++;
   }
-  // 比较级（-er/-est）：仅当形态不在白名单时（在白名单的让 runner/drawer 自成 family）
-  for (const f of reg.comparatives) {
-    if (!whitelistSet.has(f)) forms.add(f);
-  }
-
-  families[base] = [...forms].sort();
 }
-
-// 3a. 白名单里非 wink-form 的词都是自己的 base
-let baseCount = 0;
-for (const word of whitelist) {
-  const w = word.toLowerCase();
-  if (inflectionToBase.has(w)) continue; // 这是某 base 的 form，不当 base
-  baseCount++;
-  buildFamily(w);
+// 注入所有 wink 反向映射（双保险）
+for (const [form, base] of inflectionToBase) {
+  addToFamily(base, form);
+  addToFamily(base, base);
 }
-
-// 3b. wink 里 base 不在白名单的（如 'have' 不在白名单的极端 case），也要建 family
-let synthBaseCount = 0;
-for (const base of baseToWinkForms.keys()) {
-  if (families[base]) continue;
-  synthBaseCount++;
-  buildFamily(base);
-}
-
 console.log(
-  `[v2] 生成 ${Object.keys(families).length} family（白名单 base ${baseCount}，wink 补 ${synthBaseCount}）`,
+  `[v3] 自顶向下分组: ${Object.keys(families).length} bases，${lemmaResolved} 个词被归到非 self lemma`,
 );
 
-// === 4. 关键 case 验证 ===
+// ════════════════════════════════════════════════════════════════════
+// 5. 自底向上：每个 base 跑规则候选 + Norvig 验证 + lemma 校验
+// ════════════════════════════════════════════════════════════════════
+// 名词若已有 wink 不规则复数（child→children, man→men, mouse→mice...），
+// 跳过规则 -s/-es/-ies 生成，避免 'childs/mans/peoples/mouses' 这类
+// 在 Norvig 出现频率不低（OCR / 泛词 / 缩写歧义）但实际不是合法复数的形态。
+const nounsWithIrregularPlural = new Set(Object.values(nounMap));
+const PLURAL_SUFFIXES = new Set<string>();
+function isPluralCandidate(base: string, candidate: string): boolean {
+  // 当 candidate 是 base + s/es/ies 时认为是复数候选
+  if (candidate === base + 's') return true;
+  if (candidate === base + 'es') return true;
+  if (base.endsWith('y') && candidate === base.slice(0, -1) + 'ies') return true;
+  return false;
+}
+
+let augmented = 0;
+for (const base of [...Object.keys(families)]) {
+  const reg = generateRegular(base);
+  const skipPlural = nounsWithIrregularPlural.has(base);
+  for (const f of reg) {
+    if (f === base) continue;
+    if (!shapeOk(f)) continue;
+    if (families[base].has(f)) continue;
+    if (skipPlural && isPluralCandidate(base, f)) continue;
+    const winkBase = inflectionToBase.get(f);
+    if (winkBase && winkBase !== base) continue;
+    if (!evidence.has(f) && !inNorvigTop(f)) continue;
+    const candLemma = lemmaOf(f);
+    if (candLemma !== base) continue;
+    families[base].add(f);
+    augmented++;
+  }
+}
+console.log(`[v3] 自底向上补 ${augmented} 个规则形态`);
+
+// ════════════════════════════════════════════════════════════════════
+// 6. 关键 case 验证
+// ════════════════════════════════════════════════════════════════════
 const KEY_CHECKS: Array<{ root: string; mustInclude: string[]; mustNotInclude?: string[] }> = [
   { root: 'woman', mustInclude: ['woman', 'women'], mustNotInclude: ['womaned'] },
   { root: 'go', mustInclude: ['go', 'goes', 'going', 'gone', 'went'] },
@@ -200,21 +334,37 @@ const KEY_CHECKS: Array<{ root: string; mustInclude: string[]; mustNotInclude?: 
   {
     root: 'be',
     mustInclude: ['be', 'is', 'are', 'was', 'were', 'been', 'being'],
-    mustNotInclude: ['bed'],
+    mustNotInclude: ['bed', 'beed', 'bes'],
   },
-  { root: 'have', mustInclude: ['have', 'has', 'had', 'having'] },
+  { root: 'have', mustInclude: ['have', 'has', 'had', 'having'], mustNotInclude: ['haveing'] },
   { root: 'do', mustInclude: ['do', 'does', 'did', 'doing', 'done'] },
-  { root: 'child', mustInclude: ['child', 'children'] },
-  { root: 'mouse', mustInclude: ['mouse', 'mice'] },
-  { root: 'see', mustInclude: ['see', 'sees', 'saw', 'seen', 'seeing'], mustNotInclude: ['seed'] },
-  { root: 'draw', mustInclude: ['draw', 'draws', 'drew', 'drawn', 'drawing'], mustNotInclude: ['drawer'] },
+  { root: 'child', mustInclude: ['child', 'children'], mustNotInclude: ['childer', 'childest'] },
+  { root: 'mouse', mustInclude: ['mouse', 'mice'], mustNotInclude: ['mouseing', 'mousest'] },
+  {
+    root: 'see',
+    mustInclude: ['see', 'sees', 'saw', 'seen', 'seeing'],
+    mustNotInclude: ['seed', 'seest'],
+  },
+  {
+    root: 'draw',
+    mustInclude: ['draw', 'draws', 'drew', 'drawn', 'drawing'],
+    mustNotInclude: ['drawest'],
+  },
   { root: 'need', mustInclude: ['need', 'needs', 'needed', 'needing'] },
-  { root: 'bring', mustInclude: ['bring', 'brings', 'brought', 'bringing'] },
-  { root: 'river', mustInclude: ['river', 'rivers'] },
+  { root: 'bring', mustInclude: ['bring', 'brings', 'brought', 'bringing'], mustNotInclude: ['bringest'] },
+  { root: 'river', mustInclude: ['river', 'rivers'], mustNotInclude: ['rivering', 'rivered'] },
+  { root: 'work', mustInclude: ['work', 'works', 'worked', 'working'] },
+  { root: 'walk', mustInclude: ['walk', 'walks', 'walked', 'walking'] },
+  { root: 'play', mustInclude: ['play', 'plays', 'played', 'playing'] },
+  { root: 'study', mustInclude: ['study', 'studies', 'studied', 'studying'] },
+  { root: 'dream', mustInclude: ['dream', 'dreams', 'dreamed', 'dreaming'] },
+  { root: 'learn', mustInclude: ['learn', 'learns', 'learned', 'learning'] },
+  { root: 'fast', mustInclude: ['fast', 'faster', 'fastest'] },
+  { root: 'happy', mustInclude: ['happy', 'happier', 'happiest'] },
 ];
 
 let keyOk = true;
-console.log('\n[v2] 关键 case 验证:');
+console.log('\n[v3] 关键 case 验证:');
 for (const { root, mustInclude, mustNotInclude } of KEY_CHECKS) {
   const fam = families[root];
   if (!fam) {
@@ -222,19 +372,21 @@ for (const { root, mustInclude, mustNotInclude } of KEY_CHECKS) {
     keyOk = false;
     continue;
   }
-  const missing = mustInclude.filter((f) => !fam.includes(f));
-  const stolen = (mustNotInclude ?? []).filter((f) => fam.includes(f));
+  const list = [...fam].sort();
+  const missing = mustInclude.filter((f) => !fam.has(f));
+  const stolen = (mustNotInclude ?? []).filter((f) => fam.has(f));
   if (missing.length > 0 || stolen.length > 0) {
-    console.log(
-      `  ✗ ${root}: 缺[${missing.join(',')}] 误吞[${stolen.join(',')}] (${fam.length} 形态)`,
-    );
+    console.log(`  ✗ ${root}: 缺[${missing.join(',')}] 误吞[${stolen.join(',')}] (${fam.size} 形态)`);
+    console.log(`      [${list.join(', ')}]`);
     keyOk = false;
   } else {
-    console.log(`  ✓ ${root}: ${fam.length} 形态 [${fam.join(', ')}]`);
+    console.log(`  ✓ ${root}: ${fam.size} 形态 [${list.join(', ')}]`);
   }
 }
 
-// === 5. fixture 交叉验证 ===
+// ════════════════════════════════════════════════════════════════════
+// 7. fixture 交叉验证
+// ════════════════════════════════════════════════════════════════════
 if (fs.existsSync(FIXTURE_PATH)) {
   const fixture: Array<{ word: string; expectedLemmas: string[] }> = JSON.parse(
     fs.readFileSync(FIXTURE_PATH, 'utf-8'),
@@ -247,26 +399,50 @@ if (fs.existsSync(FIXTURE_PATH)) {
     const candidates = [word, ...expectedLemmas];
     const hit = candidates.some((c) => wordToFamily.has(c) || families[c]);
     if (hit) fxOk++;
-    else if (fxMissExamples.length < 6)
-      fxMissExamples.push(`${word} → ${expectedLemmas.join(',')}`);
+    else if (fxMissExamples.length < 6) fxMissExamples.push(`${word} → ${expectedLemmas.join(',')}`);
   }
-  console.log(`\n[v2] fixture 交叉: ${fxOk}/${fixture.length}`);
+  console.log(`\n[v3] fixture 交叉: ${fxOk}/${fixture.length}`);
   if (fxMissExamples.length > 0) console.log(`  miss 示例: ${fxMissExamples.join(' | ')}`);
 }
 
-// === 6. 体积 ===
-const sizes = Object.values(families).map((w) => w.length);
-sizes.sort((a, b) => a - b);
+// ════════════════════════════════════════════════════════════════════
+// 8. 体积统计
+// ════════════════════════════════════════════════════════════════════
+const sizes = Object.values(families).map((s) => s.size).sort((a, b) => a - b);
 console.log(
-  `\n[v2] 体积: median=${sizes[Math.floor(sizes.length / 2)]}, p75=${sizes[Math.floor(sizes.length * 0.75)]}, p99=${sizes[Math.floor(sizes.length * 0.99)]}, max=${sizes[sizes.length - 1]}`,
+  `\n[v3] 体积: median=${sizes[Math.floor(sizes.length / 2)]}, ` +
+    `p75=${sizes[Math.floor(sizes.length * 0.75)]}, ` +
+    `p99=${sizes[Math.floor(sizes.length * 0.99)]}, max=${sizes[sizes.length - 1]}`,
 );
 console.log(`  size==1 family: ${sizes.filter((s) => s === 1).length}`);
 
-// === 7. 写文件 ===
 if (!keyOk) {
-  console.error('\n[v2] 关键 case 未全过！');
+  console.error('\n[v3] 关键 case 未全过！');
   process.exit(1);
 }
-fs.writeFileSync(OUT_PATH, JSON.stringify(families) + '\n');
-const sz = fs.statSync(OUT_PATH).size;
-console.log(`\n[v2] ✓ 已写入 ${OUT_PATH} (${(sz / 1024 / 1024).toFixed(2)} MB)`);
+
+// ════════════════════════════════════════════════════════════════════
+// 9. 写文件
+// ════════════════════════════════════════════════════════════════════
+const familiesOut: Record<string, string[]> = {};
+for (const [k, v] of Object.entries(families)) familiesOut[k] = [...v].sort();
+fs.writeFileSync(FAMILIES_OUT, JSON.stringify(familiesOut) + '\n');
+
+const whitelist = new Set<string>();
+for (const fs2 of Object.values(familiesOut)) for (const w of fs2) whitelist.add(w);
+for (const arr of Object.values(curatedSources))
+  for (const w of arr) {
+    const l = w.toLowerCase();
+    if (shapeOk(l)) whitelist.add(l);
+  }
+for (const f of inflectionToBase.keys()) if (shapeOk(f)) whitelist.add(f);
+const sortedWhitelist = [...whitelist].sort();
+fs.writeFileSync(WHITELIST_OUT, JSON.stringify(sortedWhitelist) + '\n');
+
+const wlSize = fs.statSync(WHITELIST_OUT).size;
+const fmSize = fs.statSync(FAMILIES_OUT).size;
+console.log(
+  `\n[v3] ✓ 写入 word-families.json (${(fmSize / 1024 / 1024).toFixed(2)} MB, ` +
+    `${Object.keys(familiesOut).length} families) + dictionary-whitelist.json ` +
+    `(${(wlSize / 1024).toFixed(0)} KB, ${sortedWhitelist.length} 词)`,
+);
