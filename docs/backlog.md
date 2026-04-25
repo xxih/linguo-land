@@ -52,9 +52,7 @@
   - 位置：`src/content/utils/textProcessor.ts:246-377`
   - 改进方向：用更完整的 wordnet 数据，或把映射数据下沉到后端、随词典一起拉。
 
-- **字幕特殊路径只覆盖 YouTube/Netflix**
-  - 位置：`src/content/content.ts` L346 附近
-  - 改进方向：抽象成"字幕容器选择器配置"，让用户/远端配置可扩展（Bilibili、Coursera、TED）。
+- ~~**字幕特殊路径只覆盖 YouTube/Netflix**~~ ✅ 抽到 [`src/content/utils/subtitleSites.ts`](../apps/extension/src/content/utils/subtitleSites.ts) 的 `SUBTITLE_SITES` 数组，新增站点（Bilibili / Coursera / TED）只需追加一项配置；将来要换异步远端拉取，调用 API 不变。
 
 - **WXT 迁移残留：entrypoints 是壳，真实逻辑还在 `src/content/`、`src/background/`**
   - 位置：`src/entrypoints/content.ts`、`src/entrypoints/background.ts`

@@ -7,6 +7,7 @@ import { DebugUtils } from './utils/debugUtils';
 import { DictionaryLoader } from './utils/dictionaryLoader';
 import { SettingsManager } from './utils/settingsManager';
 import { WordCardManager } from './utils/wordCardManager';
+import { isSubtitleElement, getSubtitleContainer } from './utils/subtitleSites';
 import { debounce } from './utils/helpers';
 import { HighlightAPIChecker, PageInfo } from './utils/helpers';
 import { UISettingsManager } from '@/content-ui/utils/uiSettingsManager';
@@ -281,75 +282,8 @@ function logStatusDistribution(
 }
 
 /**
- * 检测是否为字幕元素（YouTube、Netflix 等视频网站）
- */
-function isSubtitleElement(element: HTMLElement): boolean {
-  // YouTube 字幕 - 检查元素自身
-  if (
-    element.classList.contains('ytp-caption-segment') ||
-    element.classList.contains('captions-text') ||
-    element.classList.contains('caption-visual-line') ||
-    element.classList.contains('caption-window')
-  ) {
-    return true;
-  }
-
-  // YouTube 字幕 - 检查父元素
-  if (
-    element.closest('.caption-window') ||
-    element.closest('.captions-text') ||
-    element.closest('.ytp-caption-window-container')
-  ) {
-    return true;
-  }
-
-  // Netflix 字幕
-  if (
-    element.classList.contains('player-timedtext') ||
-    element.closest('.player-timedtext-text-container')
-  ) {
-    return true;
-  }
-
-  // 通用字幕检测：包含 caption, subtitle 等关键词
-  const classNames = element.className.toString().toLowerCase();
-  if (
-    classNames.includes('caption') ||
-    classNames.includes('subtitle') ||
-    classNames.includes('sub-title')
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * 获取字幕容器元素（用于高亮）
- */
-function getSubtitleContainer(element: HTMLElement): HTMLElement | null {
-  // 查找最合适的字幕容器
-  // 优先级：caption-window > captions-text > ytp-caption-segment
-  const captionWindow = element.closest('.caption-window') as HTMLElement;
-  if (captionWindow) {
-    return captionWindow;
-  }
-
-  const captionsText = element.closest('.captions-text') as HTMLElement;
-  if (captionsText) {
-    return captionsText;
-  }
-
-  // 如果元素本身就是字幕段，返回自身
-  if (element.classList.contains('ytp-caption-segment')) {
-    return element;
-  }
-
-  return null;
-}
-
-/**
- * DOM 变化监听器（增量更新优化版，针对字幕优化）
+ * DOM 变化监听器（增量更新优化版，针对字幕优化）。
+ * 字幕识别 / 容器解析的硬编码已抽到 utils/subtitleSites.ts。
  */
 function setupDOMObserver(): void {
   // 为字幕创建单独的、更快速的处理机制
