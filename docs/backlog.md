@@ -65,4 +65,9 @@
   - 改造前 UniMorph 抽样回归集 75.3% 通过；改造后 100%（215/215）
   - 改造方式：vendor wink-lexicon 的不规则形态 exception 表到后端，client 端 `getLemmasForWord` 重写成"查表 + 后缀剥除规则 + 字典验证"的多候选 pipeline。compromise 不再参与词级别 lemma 推断。
 
+- ~~**词族数据缺 inflection + highlightManager 选错代表 lemma**~~ ✅ 落地于 [ADR 0018](adr/0018-family-surface-form-and-highlight-lemma-pick.md)
+  - 位置：旧 `apps/extension/public/word_groups_final_refined—25.json` 的 35K 词族里 31K 是孤立单词，`be` 家族不存在；`apps/extension/src/content/utils/highlightManager.ts` 拿 `lemmas[0]` 当代表
+  - 复现 case：用户标了 `woman`，文章里 `women` 仍按 unknown 高亮
+  - 改造方式：(1) `apps/server/src/lemma-expander.ts` + `scripts/rebuild-word-families.ts` 从 dictionary-whitelist 反向重建 39,665 个 family，1-词孤岛降到 26；(2) `pickRepresentativeLemma(lemmas, lemmaDataMap)` 按 known > learning > unknown 挑，作安全网
+
 - ~~**`debugUtils` 等临时代码遗留在生产路径**~~ ✅ 落地于 commit 把内存监控 + 快捷键 + banner 收进 `import.meta.env.MODE === 'development'` 分支，prod 构建会被 Vite tree-shake；处理状态 mutex + 超时看门狗 + 全局错误兜底保留（属 service-level safety net）。
