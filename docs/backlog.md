@@ -15,7 +15,7 @@
   - 现状：每个标签页全量扫描后通过 `QUERY_WORDS_STATUS` 把所有词元发给 background，再走 `/vocabulary/query`。多标签 = 多次大请求；离线即停摆。
   - 改进方向：扩展侧建本地词库镜像（IndexedDB 或 `chrome.storage.local`），background 启动时拉一次全量 + 增量同步（last-modified / 事件流）。content script 只做本地匹配，不走网络。
 
-- **白名单词典是打包进去的静态 JSON，加载失败静默降级**
+- ~~**白名单词典是打包进去的静态 JSON，加载失败静默降级**~~ ✅ 落地于 [ADR 0011](adr/0011-dictionary-whitelist-server-source.md)
   - 位置：`src/content/utils/dictionaryLoader.ts:125,146`
   - 现状：`chrome.runtime.getURL('dictionary.json')`，加载失败 fallback 为空 Set → 所有词都过不了白名单 → 整个插件静默哑掉。
   - 改进方向：词典走后端，与个人词库共享同一个本地缓存层。失败要有可见提示而不是静默降级。

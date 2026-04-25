@@ -95,7 +95,7 @@ export class VocabularyMirror {
    * - 镜像命中（用户主动标记过该词族）→ 返回该 family 的 status / familiarityLevel
    * - 镜像未命中（默认状态，即用户从未标记过）→ 返回 status='unknown'，让 content 把它当作生词高亮
    *
-   * 这与原后端 /vocabulary/query 行为一致——只要 content 已通过 dictionary.json 白名单
+   * 这与原后端 /vocabulary/query 行为一致——只要 content 已通过白名单
    * 过滤的 lemma，就视为"系统已知词"，应当返回 unknown 而不是被遗漏。
    * familyRoot 在未命中时暂用 lemma 自身——多数 lemma 已在 content 端做过 lemmatize，
    * 与 family root 大概率重合。少数边缘 case 留待后续把 lemma → family 映射也镜像下来。

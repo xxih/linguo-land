@@ -13,6 +13,7 @@ import { ResponseHandler } from './utils/responseHandler';
 import { Logger } from '../utils/logger';
 import { fetchJsonWithAuth } from './api/fetchWithAuth';
 import { VocabularyMirror } from './vocabularyMirror';
+import { DictionaryMirror } from './dictionaryMirror';
 
 /**
  * Chrome消息处理器
@@ -22,17 +23,22 @@ export class MessageHandlers {
   private vocabularyApi: VocabularyApi;
   private dictionaryService: DictionaryService;
   private mirror: VocabularyMirror;
+  private dictionaryMirror: DictionaryMirror;
   private logger: Logger;
 
   constructor() {
     this.vocabularyApi = new VocabularyApi();
     this.dictionaryService = new DictionaryService();
     this.mirror = VocabularyMirror.getInstance();
+    this.dictionaryMirror = DictionaryMirror.getInstance();
     this.logger = new Logger('MessageHandlers');
 
     // 后台启动时即拉取本地镜像（先 storage 兜底，再后台异步 sync）
     this.mirror.init().catch((err) => {
       this.logger.error('Failed to initialize vocabulary mirror', err as Error);
+    });
+    this.dictionaryMirror.init().catch((err) => {
+      this.logger.error('Failed to initialize dictionary mirror', err as Error);
     });
   }
 
@@ -678,6 +684,14 @@ export class MessageHandlers {
           sendResponse(ResponseHandler.createSuccessResponse(result));
           return false;
         }
+
+        case 'GET_DICTIONARY_WHITELIST':
+          // 让首次安装时也能拿到——getResult 内部会 await 一次远端拉取
+          ResponseHandler.handleAsyncMessage(
+            () => this.dictionaryMirror.getResult(),
+            sendResponse,
+          );
+          return true;
 
         case 'GET_WORD_DETAILS':
           // 保留用于向后兼容

@@ -110,7 +110,8 @@ export interface ChromeMessage {
     | 'TRANSLATE_STREAM_DATA' // background -> content script 翻译流式数据
     | 'TRANSLATE_STREAM_COMPLETE' // background -> content script 翻译流式完成
     | 'TRANSLATE_STREAM_ERROR' // background -> content script 翻译流式错误
-    | 'AUTO_INCREASE_FAMILIARITY'; // background -> content script 自动提升熟练度
+    | 'AUTO_INCREASE_FAMILIARITY' // background -> content script 自动提升熟练度
+    | 'GET_DICTIONARY_WHITELIST'; // 获取后端白名单（背景脚本镜像兜底）
   words?: string[];
   word?: string;
   context?: string; // AI 解析所需的上下文 / 翻译的段落
@@ -127,12 +128,22 @@ export interface ChromeMessage {
   paragraph?: string; // 段落（原文）
 }
 
+/** 词典白名单响应（背景脚本 → 内容脚本） */
+export interface DictionaryWhitelistResponse {
+  ok: boolean;
+  words?: string[];
+  version?: string;
+  syncedAt?: string;
+  error?: string;
+}
+
 export interface ChromeMessageResponse {
   success: boolean;
   data?:
     | Record<string, string>
     | Record<string, WordFamilyInfo>
     | WordDetails
+    | DictionaryWhitelistResponse
     | { success: boolean; message: string };
   error?: string;
   message?: string;

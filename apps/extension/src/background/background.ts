@@ -1,6 +1,7 @@
 import type { ChromeMessage } from 'shared-types';
 import { MessageHandlers } from './messageHandlers';
 import { VocabularyMirror } from './vocabularyMirror';
+import { DictionaryMirror } from './dictionaryMirror';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('BackgroundScript');
@@ -134,6 +135,9 @@ chrome.runtime.onStartup.addListener(() => {
   VocabularyMirror.getInstance()
     .init()
     .catch((err) => logger.error('Failed to init vocabulary mirror on startup', err as Error));
+  DictionaryMirror.getInstance()
+    .init()
+    .catch((err) => logger.error('Failed to init dictionary mirror on startup', err as Error));
 });
 
 // 监听认证状态变化——登录后触发同步、登出时清空镜像

@@ -63,8 +63,18 @@ async function initializeManagers(ctx: ContentScriptContext): Promise<void> {
 
   // 初始化词典加载器
   dictionaryLoader = DictionaryLoader.getInstance();
-  await dictionaryLoader.initialize();
-  logger.info('Dictionary loader initialized');
+  const loadResult = await dictionaryLoader.initialize();
+  if (loadResult.ok) {
+    logger.info('Dictionary loader initialized');
+  } else {
+    logger.error('Dictionary load failed', new Error(loadResult.error ?? 'unknown'));
+    // 显式提示，不再静默降级
+    showToast(
+      `词典加载失败：${loadResult.error ?? '未知错误'}。请检查网络后刷新页面。`,
+      [],
+      'info',
+    );
+  }
 }
 
 /**

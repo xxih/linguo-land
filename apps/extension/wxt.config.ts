@@ -27,7 +27,7 @@ export default defineConfig({
     ],
     web_accessible_resources: [
       {
-        resources: ['dictionary.json', 'word_groups_final_refined—25.json'],
+        resources: ['word_groups_final_refined—25.json'],
         matches: ['<all_urls>'],
       },
     ],

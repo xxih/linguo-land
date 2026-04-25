@@ -1,4 +1,10 @@
+import type { ChromeMessage, ChromeMessageResponse, DictionaryWhitelistResponse } from 'shared-types';
 import { logger } from '../../utils/logger';
+
+export interface DictionaryLoadResult {
+  ok: boolean;
+  error?: string;
+}
 
 const ABBREVIATION_FILTER_WORDS = [
   // --- 否定形式 (Not) ---
@@ -81,7 +87,8 @@ export class DictionaryLoader {
   private static instance: DictionaryLoader | null = null;
   private dictionarySet: Set<string> | null = null;
   private ignoredWords: Set<string> = new Set();
-  private loading: Promise<void> | null = null;
+  private loading: Promise<DictionaryLoadResult> | null = null;
+  private lastLoadResult: DictionaryLoadResult | null = null;
 
   // 添加要过滤的缩写词列表
   private static readonly ABBREVIATION_FILTER_WORDS = new Set([
@@ -102,49 +109,68 @@ export class DictionaryLoader {
   }
 
   /**
-   * 初始化词典（异步加载）
+   * 初始化词典（异步加载）。返回值由调用方决定要不要弹 toast。
    */
-  async initialize(): Promise<void> {
+  async initialize(): Promise<DictionaryLoadResult> {
     if (this.loading) {
       return this.loading;
     }
 
     this.loading = this.loadDictionary();
-    return this.loading;
+    this.lastLoadResult = await this.loading;
+    return this.lastLoadResult;
   }
 
   /**
-   * 加载词典文件
+   * 加载白名单。**不再读 chrome.runtime.getURL('dictionary.json')**——
+   * 数据从背景脚本的 DictionaryMirror 拿，背景再向后端 sync。失败不再
+   * 静默降级到空 Set（那会让所有词都过不了白名单 / 高亮全静默关闭），
+   * 而是把 ok=false 抛回给调用方，由 content.ts 弹 toast 让用户看见。
    */
-  private async loadDictionary(): Promise<void> {
-    try {
-      logger.info('📖 开始加载词典文件...');
-      const startTime = performance.now();
+  private async loadDictionary(): Promise<DictionaryLoadResult> {
+    logger.info('📖 通过 background 加载词典白名单...');
+    const startTime = performance.now();
 
-      // 从extension的public目录加载词典
-      const response = await fetch(chrome.runtime.getURL('dictionary.json'));
-      if (!response.ok) {
-        throw new Error(`Failed to load dictionary: ${response.status}`);
+    const result = await new Promise<DictionaryWhitelistResponse | null>((resolve) => {
+      const message: ChromeMessage = { type: 'GET_DICTIONARY_WHITELIST' };
+      try {
+        chrome.runtime.sendMessage(message, (response: ChromeMessageResponse) => {
+          if (chrome.runtime.lastError) {
+            logger.error(
+              'GET_DICTIONARY_WHITELIST runtime 错误',
+              new Error(chrome.runtime.lastError.message),
+            );
+            resolve(null);
+            return;
+          }
+          resolve((response?.data as DictionaryWhitelistResponse | undefined) ?? null);
+        });
+      } catch (err) {
+        logger.error('GET_DICTIONARY_WHITELIST 发送失败', err as Error);
+        resolve(null);
       }
+    });
 
-      const words: string[] = await response.json();
-
-      // 转换为Set以提高查询效率
-      this.dictionarySet = new Set(words.map((word) => word.toLowerCase()));
-
-      // 同时加载用户的忽略列表
-      await this.loadIgnoredWords();
-
-      const endTime = performance.now();
-      logger.info(`📖 词典加载完成:`);
-      logger.info(`  ⏱️  用时: ${(endTime - startTime).toFixed(2)}ms`);
-      logger.info(`  📝 词汇数量: ${this.dictionarySet.size}`);
-      logger.info(`  🚫 忽略词汇: ${this.ignoredWords.size}`);
-    } catch (error) {
-      logger.error('词典加载失败', error as Error);
-      // 如果加载失败，创建一个空的Set作为降级方案
-      this.dictionarySet = new Set();
+    if (!result || !result.ok || !result.words) {
+      this.dictionarySet = null;
+      const errorMsg = result?.error ?? '无法连接服务器获取词典白名单';
+      logger.error('词典白名单加载失败', new Error(errorMsg));
+      return { ok: false, error: errorMsg };
     }
+
+    this.dictionarySet = new Set(result.words.map((word) => word.toLowerCase()));
+    await this.loadIgnoredWords();
+
+    const endTime = performance.now();
+    logger.info('📖 词典白名单加载完成', {
+      durationMs: Number((endTime - startTime).toFixed(2)),
+      wordCount: this.dictionarySet.size,
+      ignoredCount: this.ignoredWords.size,
+      version: result.version,
+      syncedAt: result.syncedAt,
+    });
+
+    return { ok: true };
   }
 
   /**
@@ -162,12 +188,15 @@ export class DictionaryLoader {
   }
 
   /**
-   * 检查一个词是否在白名单词典中
+   * 检查一个词是否在白名单词典中。
+   *
+   * 词典未加载（initialize 失败 / 还没跑完）时返回 false ——
+   * 不再做"全词放行"的隐式降级。白名单缺失时高亮全停，
+   * 由调用方根据 initialize() 的返回结果显式弹 toast。
    */
   isValidWord(word: string): boolean {
     if (!this.dictionarySet) {
-      logger.warn('词典尚未加载，跳过白名单检查');
-      return true; // 词典未加载时允许所有词汇通过
+      return false;
     }
 
     const wordLower = word.toLowerCase();
@@ -178,9 +207,7 @@ export class DictionaryLoader {
     }
 
     // 检查是否在白名单词典中
-    const isValid = this.dictionarySet.has(wordLower);
-
-    return isValid;
+    return this.dictionarySet.has(wordLower);
   }
 
   /**
