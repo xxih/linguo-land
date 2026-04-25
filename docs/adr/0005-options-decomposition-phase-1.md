@@ -1,51 +1,51 @@
-# ADR 0005 — Options.tsx decomposition (phase 1)
+# ADR 0005 — Options.tsx 拆分（第一阶段）
 
-**Status:** Accepted — 2026-04-25
+**状态：** 已接受 — 2026-04-25
 
-## Context
+## 背景
 
-`apps/extension/src/options/Options.tsx` was a 2290-line single component holding:
+`apps/extension/src/options/Options.tsx` 是一个 2290 行的单组件，里面塞着：
 
-- 5 inline interface declarations
-- A custom URL-state synchronization layer (~60 lines)
-- An auth flow (login / logout / user check, ~30 lines)
-- A `formatDate` helper
-- 6 tab render blocks: overview (~180), vocabulary-list (~410), vocabulary-import (~170), vocabulary-ignored (~75), features (~250), article-analysis (~255 lines)
-- ~22 handler functions for fetching, mutating, exporting, importing
-- A sidebar render (~90 lines)
+- 5 个内联 interface 声明
+- 一套自定义的 URL 状态同步层（约 60 行）
+- 鉴权流程（登录 / 登出 / 拉用户，约 30 行）
+- `formatDate` 工具函数
+- 6 个 tab 的 render 块：overview（约 180 行）、vocabulary-list（约 410）、vocabulary-import（约 170）、vocabulary-ignored（约 75）、features（约 250）、article-analysis（约 255）
+- 大约 22 个负责拉数据 / 改数据 / 导入导出的 handler 函数
+- 一个侧边栏 render（约 90 行）
 
-Editing any tab risked accidentally breaking another. Finding a specific feature meant scrolling through ~2000 lines. A full decomposition is genuinely ~6 rounds of careful work, so this change is split into phases.
+改任何一个 tab 都有殃及其他 tab 的风险，找一个具体功能要在 2000+ 行里滚屏。一次完整拆解大概要 6 轮认真工作，所以拆成多个阶段做。
 
-## Decision
+## 决策
 
-### Phase 1 (this ADR — done)
+### 第一阶段（本 ADR — 已完成）
 
-Extract the cross-cutting infrastructure:
+抽出横切的基础设施：
 
-- `src/options/types.ts` — 5 interfaces + `ActiveTab` union.
-- `src/options/utils/formatDate.ts` — `formatDate(dateString)`.
-- `src/options/hooks/useUrlState.ts` — URL params state, `setUrlState(updates)`, `handleTabChange(tab)`, plus derived typed values (`currentPage`, `pageSize`, `sortBy`, `sortOrder`, `statusFilter`, `importSourceFilter`, `searchTerm`, `activeTab`).
-- `src/options/hooks/useAuth.ts` — `isLoggedIn`, `currentUser`, `handleLoginSuccess`, `handleLogout`. The component wraps `handleLogout` once to also clear `vocabularyData` after logout (single-concern preservation; the hook stays auth-only).
+- `src/options/types.ts` —— 5 个 interface + `ActiveTab` 联合类型
+- `src/options/utils/formatDate.ts` —— `formatDate(dateString)`
+- `src/options/hooks/useUrlState.ts` —— URL 参数状态、`setUrlState(updates)`、`handleTabChange(tab)`，以及一组派生的强类型字段（`currentPage`、`pageSize`、`sortBy`、`sortOrder`、`statusFilter`、`importSourceFilter`、`searchTerm`、`activeTab`）
+- `src/options/hooks/useAuth.ts` —— `isLoggedIn`、`currentUser`、`handleLoginSuccess`、`handleLogout`。组件再包一层 `handleLogout` 顺便清掉 `vocabularyData`（保持 hook 只关心鉴权这一件事）
 
-`Options.tsx` now imports these. Net reduction: **2290 → 2143 lines**.
+`Options.tsx` 改成 import 这些，行数从 **2290 → 2143**。
 
-### Phase 2 (deferred)
+### 第二阶段（推迟）
 
-Extract per-tab components under `src/options/tabs/`:
+`src/options/tabs/` 下抽 6 个 tab 组件：
 
-- `OverviewTab.tsx`, `VocabularyListTab.tsx`, `VocabularyImportTab.tsx`, `VocabularyIgnoredTab.tsx`, `FeaturesTab.tsx`, `ArticleAnalysisTab.tsx`
-- `components/Sidebar.tsx` for the navigation column
-- Additional data hooks: `useVocabularyData` (list + stats + expand row), `useSettings`, `useIgnoredWords`, `usePresets`, `useArticleAnalysis`, `useExport`
+- `OverviewTab.tsx`、`VocabularyListTab.tsx`、`VocabularyImportTab.tsx`、`VocabularyIgnoredTab.tsx`、`FeaturesTab.tsx`、`ArticleAnalysisTab.tsx`
+- `components/Sidebar.tsx` 用于左侧导航
+- 数据相关 hooks：`useVocabularyData`（list + stats + 行展开）、`useSettings`、`useIgnoredWords`、`usePresets`、`useArticleAnalysis`、`useExport`
 
-After phase 2, `Options.tsx` becomes a ~150-line orchestrator: hook calls plus tab routing.
+第二阶段做完后 `Options.tsx` 会变成约 150 行的编排层 —— hook 调用 + tab 路由。
 
-## Consequences
+## 影响
 
-- The seams are now visible. Phase 2 is mechanical — each tab binds against the already-stable contracts in `./types` and `./hooks/*`.
-- TypeScript and the popup+options build both pass after phase 1. No runtime behavior change.
-- Tests are deferred to phase 2: per-tab component tests are the right granularity; writing tests against the still-monolithic `Options.tsx` would be coverage padding (cf. memory `feedback_tests_core_only`).
+- 拆分的接缝清晰可见。第二阶段是机械活：每个 tab 直接绑定到现成的 `./types` 和 `./hooks/*` 上即可。
+- 第一阶段后 TypeScript 和 popup+options build 都通过，运行时行为零变化。
+- 测试推迟到第二阶段：每个 tab 组件单测才是合理粒度；针对当前还是单文件状态的 `Options.tsx` 写测试就是凑覆盖率（参考 memory `feedback_tests_core_only`）。
 
-## Open follow-ups
+## 后续
 
-- Phase 2 tab extraction (above).
-- Consider migrating off MUI/Emotion for the `content-ui/main.dev.tsx` dev variant; the prod content-ui already runs without them, and the deps add ~150 KB to anything that accidentally imports from `@mui/*`.
+- 第二阶段 tab 抽取（同上）。
+- 考虑把 `content-ui/main.dev.tsx` 这个 dev 变体也从 MUI / Emotion 迁走 —— 生产 content-ui 已经不依赖它们了，留着这俩 dep 任何文件不小心 import 一下 `@mui/*` 就多 ~150 KB。

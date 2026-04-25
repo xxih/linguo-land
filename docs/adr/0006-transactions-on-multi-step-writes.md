@@ -1,37 +1,37 @@
-# ADR 0006 — Wrap multi-step writes in transactions
+# ADR 0006 — 多步写操作加事务
 
-**Status:** Accepted — 2026-04-25
+**状态：** 已接受 — 2026-04-25
 
-## Context
+## 背景
 
-Two methods on `VocabularyService` performed reads followed by conditional writes — classic check-then-act patterns vulnerable to concurrent write races:
+`VocabularyService` 上有两个方法是"读了再写"的形态，典型的 check-then-act，并发下有竞态：
 
 1. **`updateWordStatus(lemma, status, userId, familiarityLevel?)`**
-   - Reads `word.findUnique` to map lemma → familyId
-   - Then either `deleteMany` (when `status === 'unknown'`) or upserts / updates `userFamilyStatus`
-   - Between the read and the write, another request could change the user's state for the same family — last-write-wins; for the `unknown` deletion this could accidentally drop a fresh status the user just set.
+   - 先 `word.findUnique` 把 lemma 映射到 familyId
+   - 再根据情况 `deleteMany`（status === 'unknown' 时）、`update` 或 `upsert` `userFamilyStatus`
+   - 读和写之间另一个请求可能改了同一 family 的状态 —— 后写盖前写；status='unknown' 那条删除路径甚至可能误删用户刚刚写入的状态。
 
 2. **`autoIncreaseFamiliarity(lemma, userId)`**
-   - Reads `word.findUnique`, then `userFamilyStatus.findUnique`
-   - Then `update` with `familiarityLevel: existing.familiarityLevel + 1`
-   - Two concurrent calls seeing `familiarityLevel: 5` would each compute 6 and write 6. The `lookupCount: { increment: 1 }` part was already atomic, but the familiarity raise was not.
+   - 读 `word.findUnique`、再读 `userFamilyStatus.findUnique`
+   - 然后 `update` 时写入 `familiarityLevel: existing.familiarityLevel + 1`
+   - 两个并发请求都看到 `familiarityLevel: 5` 时会各自写 6（实际应该是 7）。`lookupCount: { increment: 1 }` 这部分本来就是原子的，但 familiarity 的递增不是。
 
-`autoIncreaseFamiliarity` was also carrying ~25 lines of `console.log` debug output that obscured the actual logic.
+`autoIncreaseFamiliarity` 还顶着 ~25 行 `console.log` 调试输出，把真实逻辑遮得很碎。
 
-## Decision
+## 决策
 
-Wrap both methods in `prisma.$transaction(async (tx) => { ... })` and route every DB call through the transaction client `tx`. This makes the read-then-write path serializable per row at the DB level, eliminating the check-then-act race.
+两个方法都包到 `prisma.$transaction(async (tx) => { ... })` 里，所有 DB 调用走事务客户端 `tx`。这样"读再写"在 DB 层是按行可串行化的，check-then-act 竞态消失。
 
-Other simplifications inside the transactions:
+事务里面顺手简化：
 
-- In `updateWordStatus`, collapse the "update familiarity only" path from `findUnique + update` to a single `updateMany` — no need to read first when we're only reporting "did anything change."
-- In `autoIncreaseFamiliarity`, drop the verbose debug logging; keep one informational log per outcome branch.
+- `updateWordStatus` 的"只更新熟练度"分支由 `findUnique + update` 改成单条 `updateMany` —— 报告"是否真的改到了"时不需要先读。
+- `autoIncreaseFamiliarity` 删掉冗长的调试 log，每个分支保留一条信息日志。
 
-Touched: `apps/server/src/vocabulary.service.ts` only.
+只动了 `apps/server/src/vocabulary.service.ts` 一个文件。
 
-## Consequences
+## 影响
 
-- Concurrent updates to the same `(userId, familyId)` row are now serialized at the DB layer. Lost-update and stale-delete races on this row are impossible.
-- Net file size shrinks ~70 lines from removing the debug-log noise.
-- Other multi-step write paths (`addPresetVocabulary`, `importVocabularyFromJson`) are not yet transactional. Those are bulk-import flows where partial failure is recoverable by retrying the import — lower priority. They'll get the same treatment when the repository-layer refactor (A2) lands.
-- No new tests landed: the failure mode is concurrency, hard to unit-test without a real DB harness. The fix is correct by construction (Prisma interactive transactions use REPEATABLE_READ on Postgres). An integration test against the real DB would be valuable later — folded into the test-strategy plan that comes with A2.
+- 同一 `(userId, familyId)` 行的并发更新现在在 DB 层串行化，丢更新和误删都不可能再发生。
+- 文件变小约 70 行（清掉了调试噪音）。
+- 其他批量写路径（`addPresetVocabulary`、`importVocabularyFromJson`）暂时没包事务 —— 它们是批量导入，部分失败可以重试，优先级低，会在仓储层重构（A2）落地时一起处理。
+- 没新增测试：失败模式是并发，没有真实 DB 测试用例的话不太好单测。修复在构造上是正确的（Prisma 互动事务在 Postgres 上是 REPEATABLE_READ）。后面 A2 会一起把集成测试基础设施立起来。

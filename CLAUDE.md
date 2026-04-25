@@ -28,6 +28,10 @@ pnpm workspaces + Turbo 的 monorepo：
 
 `apps/server` 启动时强制要求 `JWT_SECRET` 和 `JWT_REFRESH_SECRET`（否则崩溃）。新增需要 env 的功能时复用 `src/env.util.ts: requireConfig`，不要手写 `process.env.X || 'fallback'`。
 
+### 文档语言
+
+仓库内的所有文档（ADR、README、`.env.example` 注释、贡献者指南）一律**用中文撰写**。代码标识符（文件路径、函数名、变量名、环境变量名、npm 包名）保持英文不翻译。引用代码块、错误信息、API 字段名也保持英文原文。
+
 ## 架构决策记录（ADR）
 
 非 trivial 的重构、schema 变更、新架构模式落地后，写一份短 ADR：`docs/adr/NNNN-<slug>.md`，结构 **Context / Decision / Consequences**。这是本项目的主要决策档案。

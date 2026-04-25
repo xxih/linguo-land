@@ -1,30 +1,30 @@
-# ADR 0002 — Remove admin app and admin-only endpoints
+# ADR 0002 — 移除 admin 应用和 admin 专用 endpoint
 
-**Status:** Accepted — 2026-04-25
+**状态：** 已接受 — 2026-04-25
 
-## Context
+## 背景
 
-`apps/admin` was a Next.js 15 maintenance UI for word-family management (list, remove word, move word, stats). It was:
+`apps/admin` 是一个 Next.js 15 词族管理后台（列表 / 删词 / 移词 / 统计）。它处于：
 
-- Not in any CI workflow, not deployed, not referenced by `apps/extension` (verified via grep — zero hits)
-- On Tailwind v3.4 while the rest of the frontend has moved to v4 — every passing day made the styling layer more divergent
-- Backed by `apps/server/src/admin.controller.ts` and three "admin-only" endpoints in `vocabulary.controller.ts` (`/word/:wordText/remove`, `/move`, `/create-family`) — none of which the extension calls
+- 不在任何 CI workflow 里、没有部署、`apps/extension` 里也没有任何引用（grep 验证零命中）
+- 用 Tailwind v3.4，而前端其他部分已经迁到 v4 —— 越拖越分裂
+- 后端配套有 `apps/server/src/admin.controller.ts` 和 `vocabulary.controller.ts` 里三个 admin 专用 endpoint（`/word/:wordText/remove`、`/move`、`/create-family`），扩展同样不调用
 
-The product has no users yet; carrying unused tooling now is pure cost.
+产品没有用户。继续维护这套没人用的工具是纯成本。
 
-## Decision
+## 决策
 
-Delete the entire stack:
+把整套删掉：
 
-- `apps/admin/` directory
+- `apps/admin/` 整个目录
 - `apps/server/src/admin.controller.ts`
-- The three admin-only endpoints in `vocabulary.controller.ts` and their backing service methods (`removeWordFromFamily`, `moveWordToFamily`, `createFamilyFromWord` in `vocabulary.service.ts`)
-- `AdminController` removed from `app.module.ts`
-- `apps/admin` removed from `CLAUDE.md` project overview
+- `vocabulary.controller.ts` 里那三个 admin 专用 endpoint，以及 `vocabulary.service.ts` 中对应的 `removeWordFromFamily` / `moveWordToFamily` / `createFamilyFromWord`
+- `app.module.ts` 中的 `AdminController` 引用
+- `CLAUDE.md` 项目概览里去掉 `apps/admin`
 
-The Prisma schema is unchanged — word-family data still exists, just no longer has a UI.
+Prisma schema 不动 —— 词族数据本身保留，只是没有 UI 而已。
 
-## Consequences
+## 影响
 
-- Less code, less drift, no Tailwind version split, smaller mental surface for the upcoming refactor passes (repository layer, schema cleanup, etc.).
-- If word-family corpus needs editorial cleanup later, write a one-off CLI script or stand up a fresh, properly-scoped admin app. Starting from a clean slate beats inheriting a stale React app.
+- 代码量、版本分裂、维护负担一起减少，给后面的重构（仓储层、schema 清理等）腾出心智空间。
+- 以后如果真的需要词族编辑，写一个 one-off CLI 脚本，或者重新起一个干净的小后台，都比继承一个过时的 React 应用划算。

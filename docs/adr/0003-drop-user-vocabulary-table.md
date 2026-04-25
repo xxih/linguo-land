@@ -1,34 +1,34 @@
-# ADR 0003 — Drop UserVocabulary legacy table
+# ADR 0003 — 删除 UserVocabulary 旧表
 
-**Status:** Accepted — 2026-04-25
+**状态：** 已接受 — 2026-04-25
 
-## Context
+## 背景
 
-`UserVocabulary` was the original per-user word table — string `userId` (legacy), surface-form `word` strings, no concept of word families. It was superseded by `UserFamilyStatus` when word families landed (`migrations/20251011174252_add_word_families`), but kept around "for migration safety."
+`UserVocabulary` 是最早的"用户单词表" —— string 类型的 `userId`（历史包袱）、保留单词的表面形式、没有词族概念。词族功能上线后（`migrations/20251011174252_add_word_families`）它就被 `UserFamilyStatus` 替代了，但当时为了"迁移安全"把旧表保留了下来。
 
-In practice the two tables drifted. New writes (status updates, preset additions, family-aware tracking) only go through `UserFamilyStatus`. Three stale code paths still touched the old table:
+时间一长两张表已经飘开了。新写入（状态更新、预设词库添加、词族级追踪）只走 `UserFamilyStatus`。但还有三处仍在碰旧表：
 
-- `VocabularyService.updateWordEncounter` — only invoked from a commented-out block in `VocabularyController.queryWords`. Effectively dead.
-- `VocabularyService.seedSampleData` — only used by `POST /seed`, a dev-time sample-data convenience.
-- `VocabularyService.getVocabularySources` — used by `GET /sources` to list import sources for the UI. Wrong table — the new `importSource` lives on `UserFamilyStatus`.
+- `VocabularyService.updateWordEncounter` —— 只在 controller 里被一段已经注释掉的代码调用，是死代码
+- `VocabularyService.seedSampleData` —— 只用于 dev `POST /seed` 的样例数据
+- `VocabularyService.getVocabularySources` —— `GET /sources` 用它返回导入来源列表，但查的是错的表（新的 `importSource` 字段在 `UserFamilyStatus` 上）
 
-The product has no users yet. There is no migration safety to preserve.
+产品现在没有用户，没什么"迁移安全"需要保留。
 
-## Decision
+## 决策
 
-Delete the `UserVocabulary` table and all its references:
+把 `UserVocabulary` 表和所有引用一次性删掉：
 
-- `prisma/schema.prisma` — remove the `UserVocabulary` model and its legacy section header
-- `prisma/migrations/20260425170000_drop_user_vocabulary/migration.sql` — `DROP TABLE IF EXISTS "user_vocabulary"`
-- `vocabulary.service.ts`:
-  - delete `updateWordEncounter` (dead)
-  - delete `seedSampleData` (dev-only; `POST /add-preset/<key>` covers the same need)
-  - rewrite `getVocabularySources` to query `UserFamilyStatus.importSource` (semantically what the old query *was* trying to express)
-- `vocabulary.controller.ts` — drop `POST /seed` and the commented-out encounter-tracking block
+- `prisma/schema.prisma` —— 删掉 model 和遗留区段头注释
+- `prisma/migrations/20260425170000_drop_user_vocabulary/migration.sql` —— `DROP TABLE IF EXISTS "user_vocabulary"`
+- `vocabulary.service.ts`：
+  - 删掉 `updateWordEncounter`（死代码）
+  - 删掉 `seedSampleData`（dev 专用，`POST /add-preset/<key>` 完全覆盖这个用途）
+  - 重写 `getVocabularySources` 改查 `UserFamilyStatus.importSource`（这才是该字段当前的位置）
+- `vocabulary.controller.ts` —— 删掉 `POST /seed` endpoint 和那段注释掉的 encounter 追踪代码
 
-## Consequences
+## 影响
 
-- Single source of truth for user vocabulary state — no more accidental dual writes drifting apart.
-- The dev-time `/seed` endpoint is gone; populate dev data via `POST /add-preset/cet_4_6` (or any other preset key).
-- One redundant index goes away with the table — `user_vocabulary_userId_importSource_idx` was already covered by `user_family_status_userId_importSource_idx`.
-- Anyone with an old DB needs the migration applied: `prisma migrate dev` (local) or via the deploy pipeline.
+- 用户词汇状态从此只有一个真值源，不会再有双写飘移的风险。
+- dev 时初始化数据走 `POST /add-preset/cet_4_6`（或别的 preset key），不再有 `/seed` 这条快捷路径。
+- `user_vocabulary_userId_importSource_idx` 索引随表一起没了 —— 反正 `user_family_status_userId_importSource_idx` 已经覆盖。
+- 任何还在跑旧 schema 的 DB 都需要 apply 新 migration：本地 `prisma migrate dev`，线上走部署流水线。
