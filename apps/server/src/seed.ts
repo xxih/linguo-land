@@ -1,18 +1,20 @@
 import { PrismaClient } from '../generated/prisma';
 import * as fs from 'fs';
 import * as path from 'path';
-import { expandLemmaToSurfaceForms } from './lemma-expander';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('开始导入词族数据...');
 
-  // 读取词族数据文件
-  const dataPath = path.join(__dirname, '../../extension/public/word_groups_final_refined—25.json');
+  // 词族数据由 scripts/rebuild-word-families.ts 从 dictionary-whitelist.json 出发，
+  // 用 lemma-expander 反向生成（ADR 0018）。每次词典/规则变化跑一次 rebuild
+  // 即可，seed 只是把 JSON 写入 DB。
+  const dataPath = path.join(__dirname, 'data/word-families.json');
 
   if (!fs.existsSync(dataPath)) {
     console.error(`找不到数据文件: ${dataPath}`);
+    console.error('先跑：pnpm --filter server ts-node scripts/rebuild-word-families.ts');
     process.exit(1);
   }
 
@@ -38,9 +40,10 @@ async function main() {
         create: { rootWord },
       });
 
-      // 2. 种子 JSON 里的人工词族（含 break/breakable/breakage 等派生词）
-      // —— 用 upsert 抢占归属，权威性最高
-      const seededWords = new Set<string>();
+      // 2. 写入词族下所有 surface form。Word.text @unique，多 family 同时
+      // 声明同一词时（如 lay 属 lay 也属 lie），先到先得（rebuild 脚本里
+      // 按 base 长度优先级已经做过 disambiguation）。这里用 upsert 让
+      // 后到的不抢已属其他 family 的词。
       for (const wordText of wordsInFamily as string[]) {
         if (typeof wordText !== 'string' || !wordText.trim()) {
           continue;
@@ -48,25 +51,10 @@ async function main() {
         const text = wordText.toLowerCase();
         await prisma.word.upsert({
           where: { text },
-          update: { familyId: family.id },
+          update: {}, // 不抢——已属其他 family 的词保留原归属
           create: { text, familyId: family.id },
         });
-        seededWords.add(text);
         processedWords++;
-      }
-
-      // 3. 形态学展开 rootWord 的所有 surface form（women/went/bigger 等）。
-      // ADR 0018：人工 seed 缺哪个 inflection 都会让 highlight 失效，靠
-      // expander 兜底确保完整。createMany skipDuplicates 不会抢已属其他
-      // family 的词（如 lay 已属 lay family，再 expand lie 时不会被改写）。
-      const expanded = expandLemmaToSurfaceForms(rootWord);
-      const toAdd = [...expanded].filter((w) => !seededWords.has(w));
-      if (toAdd.length > 0) {
-        const result = await prisma.word.createMany({
-          data: toAdd.map((text) => ({ text, familyId: family.id })),
-          skipDuplicates: true,
-        });
-        processedWords += result.count;
       }
 
       processedFamilies++;

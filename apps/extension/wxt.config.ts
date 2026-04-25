@@ -25,12 +25,6 @@ export default defineConfig({
       'http://api.linguoland.com/*',
       'https://api.linguoland.com/*',
     ],
-    web_accessible_resources: [
-      {
-        resources: ['word_groups_final_refined—25.json'],
-        matches: ['<all_urls>'],
-      },
-    ],
     icons: {
       '16': 'logo.png',
       '48': 'logo.png',
