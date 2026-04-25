@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import type { HighlightInfo } from '../types';
+import { pickRepresentativeLemma } from './highlightManager';
 
 beforeAll(() => {
   class FakeHighlight {
@@ -102,5 +103,51 @@ describe('HighlightManager.updateWordStatus 跨 frame 整族匹配', () => {
 
     expect(runItem.status).toBe('learning');
     expect(runItem.familiarityLevel).toBe(3);
+  });
+});
+
+describe('pickRepresentativeLemma — ADR 0018', () => {
+  // 这是 highlightManager 选 lemma 当代表的核心：women→[women, woman]，
+  // lemmaDataMap 里 women=unknown / woman=known，必须挑 woman 出来才能让
+  // 用户已标的家族被识别。
+
+  it('多 lemma 中只有一个有非 unknown 状态时，挑那个', () => {
+    const lemmas = ['women', 'woman'];
+    const map = {
+      women: { status: 'unknown', familyRoot: 'women', familiarityLevel: 0 },
+      woman: { status: 'known', familyRoot: 'woman', familiarityLevel: 5 },
+    };
+    expect(pickRepresentativeLemma(lemmas, map)).toBe('woman');
+  });
+
+  it('known > learning > unknown', () => {
+    const lemmas = ['a', 'b', 'c'];
+    const map = {
+      a: { status: 'unknown', familyRoot: 'a', familiarityLevel: 0 },
+      b: { status: 'learning', familyRoot: 'b', familiarityLevel: 2 },
+      c: { status: 'known', familyRoot: 'c', familiarityLevel: 5 },
+    };
+    expect(pickRepresentativeLemma(lemmas, map)).toBe('c');
+  });
+
+  it('全是 unknown 时退回 lemmas[0]，保持原有行为', () => {
+    const lemmas = ['went', 'go'];
+    const map = {
+      went: { status: 'unknown', familyRoot: 'went', familiarityLevel: 0 },
+      go: { status: 'unknown', familyRoot: 'go', familiarityLevel: 0 },
+    };
+    expect(pickRepresentativeLemma(lemmas, map)).toBe('went');
+  });
+
+  it('lemmaDataMap 缺 lemma 当 unknown 处理', () => {
+    const lemmas = ['x', 'y'];
+    const map = {
+      y: { status: 'known', familyRoot: 'y', familiarityLevel: 5 },
+    };
+    expect(pickRepresentativeLemma(lemmas, map)).toBe('y');
+  });
+
+  it('空 lemmas 返回空串，不抛错', () => {
+    expect(pickRepresentativeLemma([], {})).toBe('');
   });
 });

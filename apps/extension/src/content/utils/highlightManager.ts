@@ -4,6 +4,40 @@ import { Logger } from '../../utils/logger';
 import { DictionaryLoader } from './dictionaryLoader';
 
 /**
+ * 从 lemma 候选集里挑"状态最有信号"的那个当代表（ADR 0018）。
+ *
+ * 背景：textProcessor.getLemmasForWord 会返回多 lemma 候选，例如
+ *   women → ['women', 'woman']
+ *   bigger → ['bigger', 'big']
+ *   went → ['went', 'go']
+ * lemmaDataMap 是 vocabularyMirror 按 lemma 查到的状态映射。如果用户标过
+ * woman（known），则 lemmaDataMap['woman'].status === 'known'，但
+ * lemmaDataMap['women'].status === 'unknown'（family.words[] 不一定全）。
+ *
+ * 直接拿 lemmas[0] 当代表就漏掉用户的标记。这个函数按 known > learning >
+ * unknown 优先级挑——任何"已被用户标过"的 family 都比 fallback 的 unknown
+ * 强。不存在更强信号时退回 lemmas[0] 保持原行为。
+ */
+export function pickRepresentativeLemma(
+  lemmas: string[],
+  lemmaDataMap: Record<string, { status: string; familyRoot: string; familiarityLevel: number }>,
+): string {
+  if (lemmas.length === 0) return '';
+  const priority: Record<string, number> = { known: 3, learning: 2, unknown: 1 };
+  let best = lemmas[0];
+  let bestScore = priority[lemmaDataMap[best]?.status ?? 'unknown'] ?? 0;
+  for (let i = 1; i < lemmas.length; i++) {
+    const status = lemmaDataMap[lemmas[i]]?.status;
+    const score = priority[status ?? 'unknown'] ?? 0;
+    if (score > bestScore) {
+      best = lemmas[i];
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/**
  * 高亮管理器
  * 负责管理所有高亮相关的功能
  */
@@ -326,8 +360,8 @@ export class HighlightManager {
               // 在原字符串中查找这个部分的位置
               const partIndex = originalWord.toLowerCase().indexOf(partLower, searchPos);
               if (partIndex !== -1) {
-                // 使用第一个词元作为代表来查询状态
-                const representativeLemma = lemmas[0];
+                // 挑状态最有信号的 lemma 当代表（ADR 0018）
+                const representativeLemma = pickRepresentativeLemma(lemmas, lemmaDataMap);
                 const lemmaData = lemmaDataMap[representativeLemma];
 
                 if (lemmaData) {
@@ -359,8 +393,8 @@ export class HighlightManager {
           // 处理普通单词（非驼峰命名）
           const lemmas = wordToLemmaMap.get(wordLower);
           if (lemmas && lemmas.length > 0) {
-            // 使用第一个词元作为代表来查询状态
-            const representativeLemma = lemmas[0];
+            // 挑状态最有信号的 lemma 当代表（ADR 0018）
+            const representativeLemma = pickRepresentativeLemma(lemmas, lemmaDataMap);
             const lemmaData = lemmaDataMap[representativeLemma];
 
             if (lemmaData) {

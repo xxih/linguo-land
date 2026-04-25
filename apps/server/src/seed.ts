@@ -1,6 +1,7 @@
 import { PrismaClient } from '../generated/prisma';
 import * as fs from 'fs';
 import * as path from 'path';
+import { expandLemmaToSurfaceForms } from './lemma-expander';
 
 const prisma = new PrismaClient();
 
@@ -37,22 +38,35 @@ async function main() {
         create: { rootWord },
       });
 
-      // 2. 为该词族中的每个单词创建 Word 记录
+      // 2. 种子 JSON 里的人工词族（含 break/breakable/breakage 等派生词）
+      // —— 用 upsert 抢占归属，权威性最高
+      const seededWords = new Set<string>();
       for (const wordText of wordsInFamily as string[]) {
         if (typeof wordText !== 'string' || !wordText.trim()) {
           continue;
         }
-
+        const text = wordText.toLowerCase();
         await prisma.word.upsert({
-          where: { text: wordText.toLowerCase() },
+          where: { text },
           update: { familyId: family.id },
-          create: {
-            text: wordText.toLowerCase(),
-            familyId: family.id,
-          },
+          create: { text, familyId: family.id },
         });
-
+        seededWords.add(text);
         processedWords++;
+      }
+
+      // 3. 形态学展开 rootWord 的所有 surface form（women/went/bigger 等）。
+      // ADR 0018：人工 seed 缺哪个 inflection 都会让 highlight 失效，靠
+      // expander 兜底确保完整。createMany skipDuplicates 不会抢已属其他
+      // family 的词（如 lay 已属 lay family，再 expand lie 时不会被改写）。
+      const expanded = expandLemmaToSurfaceForms(rootWord);
+      const toAdd = [...expanded].filter((w) => !seededWords.has(w));
+      if (toAdd.length > 0) {
+        const result = await prisma.word.createMany({
+          data: toAdd.map((text) => ({ text, familyId: family.id })),
+          skipDuplicates: true,
+        });
+        processedWords += result.count;
       }
 
       processedFamilies++;
