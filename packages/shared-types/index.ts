@@ -1,15 +1,6 @@
 // 定义单词的熟悉度状态
 export type WordFamiliarityStatus = 'unknown' | 'learning' | 'known';
 
-// 定义 API 返回的单个单词对象结构（旧版，保留以兼容）
-export interface WordState {
-  word: string; // 单词原文（小写词元）
-  status: WordFamiliarityStatus;
-  familiarityLevel?: number; // 0-5
-  lastSeenAt?: Date;
-  encounterCount?: number;
-}
-
 // 定义词族信息
 export interface WordFamilyInfo {
   status: WordFamiliarityStatus;
@@ -25,11 +16,34 @@ export interface WordQueryRequest {
   words: string[];
 }
 
+// /api/v1/vocabulary/sync 全量同步——一次性返回当前用户拥有的所有词族 + 该词族下所有词形
+export interface VocabularySyncFamily {
+  familyRoot: string;
+  lemmas: string[]; // 词族下所有 word 形态（含词根本身）
+  status: WordFamiliarityStatus;
+  familiarityLevel: number;
+}
+
+export interface VocabularySyncResponse {
+  syncedAt: string; // ISO 8601 时间戳，扩展端可用于判断陈旧
+  families: VocabularySyncFamily[];
+}
+
 // 定义 /api/v1/vocabulary/:word 的请求体类型
 export interface WordUpdateRequest {
   status?: WordFamiliarityStatus; // 改为可选，支持只更新熟练度
   familiarityLevel?: number;
   userId?: string;
+}
+
+// 写入接口（PUT /vocabulary/:word, POST /vocabulary/:word/increase-familiarity）的响应。
+// 写成功后告知扩展端如何更新本地 mirror：要么 upsert family，要么 remove 整个 family。
+export interface WordMutationResponse {
+  success: boolean;
+  message: string;
+  family?: VocabularySyncFamily; // 写入或更新——upsert 到镜像
+  removedFamilyRoot?: string;    // 状态被设为 unknown / 词族被移出用户词库——按 root 删
+  // family 与 removedFamilyRoot 互斥；都缺省表示 lemma 不在系统词表 / no-op
 }
 
 // --- 新的词典数据类型 ---

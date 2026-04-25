@@ -1,9 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
-import type { WordFamiliarityStatus } from 'shared-types';
-import { WordFamiliarityStatus as PrismaWordStatus } from '../generated/prisma';
+import type {
+  VocabularySyncFamily,
+  VocabularySyncResponse,
+  WordFamiliarityStatus,
+} from 'shared-types';
+import { Prisma, WordFamiliarityStatus as PrismaWordStatus } from '../generated/prisma';
 import * as fs from 'fs';
 import * as path from 'path';
+
+/**
+ * 写入操作的结果——告知扩展端如何更新本地 mirror。
+ *  - updated: family upsert
+ *  - removed: family 已从用户词库移除（按 root 删镜像）
+ *  - noop: 词不在系统词表 / 状态无变化
+ */
+export type MutationOutcome =
+  | { kind: 'updated'; family: VocabularySyncFamily }
+  | { kind: 'removed'; familyRoot: string }
+  | { kind: 'noop' };
 
 @Injectable()
 export class VocabularyService {
@@ -75,19 +90,16 @@ export class VocabularyService {
   }
 
   /**
-   * 更新词族状态（基于词元）
-   * @param lemma 词元（已还原的基本形式）
-   * @param status 新状态（可选）
-   * @param userId 用户ID
-   * @param familiarityLevel 熟练度（可选）
+   * 更新词族状态（基于词元）。
+   * 返回 MutationOutcome——告知扩展端如何更新本地 mirror。
    */
   async updateWordStatus(
     lemma: string,
     status: WordFamiliarityStatus | null,
     userId: number,
     familiarityLevel?: number,
-  ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+  ): Promise<MutationOutcome> {
+    return this.prisma.$transaction(async (tx) => {
       const wordInfo = await tx.word.findUnique({
         where: { text: lemma },
         select: { familyId: true, family: { select: { rootWord: true } } },
@@ -95,36 +107,32 @@ export class VocabularyService {
 
       if (!wordInfo) {
         console.warn(`无法更新单词 "${lemma}" 的状态，因为它不属于任何词族。`);
-        return;
+        return { kind: 'noop' };
       }
 
       const { familyId } = wordInfo;
+      const { rootWord } = wordInfo.family;
 
-      // "unknown" 表示从词库中移除该词族
+      // "unknown" 表示从词库中移除该词族——告知客户端按 root 删除镜像
       if (status === 'unknown') {
         await tx.userFamilyStatus.deleteMany({ where: { userId, familyId } });
-        console.log(
-          `[UPDATE] 词族 "${wordInfo.family.rootWord}" (词元: "${lemma}") 已从词库移除`,
-        );
-        return;
+        console.log(`[UPDATE] 词族 "${rootWord}" (词元: "${lemma}") 已从词库移除`);
+        return { kind: 'removed', familyRoot: rootWord };
       }
 
       // 仅更新熟练度（保持状态）
       if (status === null && familiarityLevel !== undefined) {
-        const updated = await tx.userFamilyStatus.updateMany({
+        await tx.userFamilyStatus.updateMany({
           where: { userId, familyId },
           data: { familiarityLevel, updatedAt: new Date() },
         });
-        if (updated.count > 0) {
-          console.log(
-            `[UPDATE] 已更新词族 "${wordInfo.family.rootWord}" 熟练度为 ${familiarityLevel}`,
-          );
-        }
-        return;
+        console.log(`[UPDATE] 已更新词族 "${rootWord}" 熟练度为 ${familiarityLevel}`);
+        const family = await this.readFamilyState(tx, userId, familyId);
+        return family ? { kind: 'updated', family } : { kind: 'noop' };
       }
 
       const prismaStatus = status ? this.mapStatusToPrismaStatus(status) : undefined;
-      if (!prismaStatus) return;
+      if (!prismaStatus) return { kind: 'noop' };
 
       let finalFamiliarityLevel = familiarityLevel;
       if (finalFamiliarityLevel === undefined) {
@@ -147,25 +155,23 @@ export class VocabularyService {
         },
       });
 
-      console.log(
-        `[UPDATE] 已更新词族 "${wordInfo.family.rootWord}" (词元: "${lemma}") 状态为 "${status}"`,
-      );
+      console.log(`[UPDATE] 已更新词族 "${rootWord}" (词元: "${lemma}") 状态为 "${status}"`);
+      const family = await this.readFamilyState(tx, userId, familyId);
+      return family ? { kind: 'updated', family } : { kind: 'noop' };
     });
   }
 
   /**
-   * 自动提升熟练度（最高到7）并增加查词次数
-   * @param lemma 词元
-   * @param userId 用户ID
+   * 自动提升熟练度（最高到 7）并增加查词次数。
    */
-  async autoIncreaseFamiliarity(lemma: string, userId: number): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+  async autoIncreaseFamiliarity(lemma: string, userId: number): Promise<MutationOutcome> {
+    return this.prisma.$transaction(async (tx) => {
       const wordInfo = await tx.word.findUnique({
         where: { text: lemma },
         select: { familyId: true, family: { select: { rootWord: true } } },
       });
 
-      if (!wordInfo) return;
+      if (!wordInfo) return { kind: 'noop' };
 
       const { familyId } = wordInfo;
       const existing = await tx.userFamilyStatus.findUnique({
@@ -174,7 +180,7 @@ export class VocabularyService {
 
       // 不在学习列表里的词（含从未加入 + 已标记 unknown）不记录 lookup
       if (!existing || existing.status === PrismaWordStatus.UNKNOWN) {
-        return;
+        return { kind: 'noop' };
       }
 
       const shouldRaise =
@@ -199,7 +205,43 @@ export class VocabularyService {
           `[AUTO] 词族 "${wordInfo.family.rootWord}" 仅增加查词次数: ${updated.lookupCount}`,
         );
       }
+
+      const family = await this.readFamilyState(tx, userId, familyId);
+      return family ? { kind: 'updated', family } : { kind: 'noop' };
     });
+  }
+
+  /**
+   * 读取 (userId, familyId) 的最新完整状态——含 familyRoot、所有词形、status、familiarityLevel。
+   * 在写事务内复用，避免事务外二次查询。
+   */
+  private async readFamilyState(
+    tx: Prisma.TransactionClient,
+    userId: number,
+    familyId: number,
+  ): Promise<VocabularySyncFamily | null> {
+    const status = await tx.userFamilyStatus.findUnique({
+      where: { userId_familyId: { userId, familyId } },
+      select: {
+        status: true,
+        familiarityLevel: true,
+        family: {
+          select: {
+            rootWord: true,
+            words: { select: { text: true } },
+          },
+        },
+      },
+    });
+
+    if (!status) return null;
+
+    return {
+      familyRoot: status.family.rootWord,
+      lemmas: status.family.words.map((w) => w.text),
+      status: this.mapPrismaStatusToStatus(status.status),
+      familiarityLevel: status.familiarityLevel,
+    };
   }
 
   private mapPrismaStatusToStatus(prismaStatus: PrismaWordStatus): WordFamiliarityStatus {
@@ -312,6 +354,38 @@ export class VocabularyService {
     }));
 
     return result;
+  }
+
+  /**
+   * 全量同步：一次性返回当前用户拥有的所有词族及其所有词形。
+   * 扩展端用此构建本地镜像，所有 QUERY_WORDS_STATUS 读路径走本地。
+   */
+  async syncVocabulary(userId: number): Promise<VocabularySyncResponse> {
+    const rows = await this.prisma.userFamilyStatus.findMany({
+      where: { userId },
+      select: {
+        status: true,
+        familiarityLevel: true,
+        family: {
+          select: {
+            rootWord: true,
+            words: { select: { text: true } },
+          },
+        },
+      },
+    });
+
+    const families = rows.map((row) => ({
+      familyRoot: row.family.rootWord,
+      lemmas: row.family.words.map((w) => w.text),
+      status: this.mapPrismaStatusToStatus(row.status),
+      familiarityLevel: row.familiarityLevel,
+    }));
+
+    return {
+      syncedAt: new Date().toISOString(),
+      families,
+    };
   }
 
   /**

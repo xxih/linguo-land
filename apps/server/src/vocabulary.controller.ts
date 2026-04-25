@@ -17,6 +17,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { VocabularyService } from './vocabulary.service';
 import { JwtAuthGuard } from './auth/guards';
 import type {
+  VocabularySyncResponse,
+  WordMutationResponse,
   WordQueryRequest,
   WordQueryResponse,
   WordUpdateRequest,
@@ -63,10 +65,10 @@ export class VocabularyController {
     @Request() req,
     @Param('word') word: string,
     @Body() request: WordUpdateRequest,
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<WordMutationResponse> {
     try {
       const userId = req.user.id;
-      await this.vocabularyService.updateWordStatus(
+      const outcome = await this.vocabularyService.updateWordStatus(
         word,
         request.status ?? null,
         userId,
@@ -85,6 +87,8 @@ export class VocabularyController {
       return {
         success: true,
         message,
+        family: outcome.kind === 'updated' ? outcome.family : undefined,
+        removedFamilyRoot: outcome.kind === 'removed' ? outcome.familyRoot : undefined,
       };
     } catch (error) {
       console.error(`Failed to update word status for: ${word}`, error);
@@ -100,28 +104,17 @@ export class VocabularyController {
   async autoIncreaseFamiliarity(
     @Request() req,
     @Param('word') word: string,
-  ): Promise<{ success: boolean; message: string }> {
-    console.log('[VocabularyController] 收到自动提升熟练度请求');
-    console.log('[VocabularyController] 词元:', word);
-    console.log('[VocabularyController] 用户ID:', req.user?.id);
-
+  ): Promise<WordMutationResponse> {
     try {
       const userId = req.user.id;
-      console.log('[VocabularyController] 调用 service.autoIncreaseFamiliarity');
-      await this.vocabularyService.autoIncreaseFamiliarity(word, userId);
-      console.log('[VocabularyController] 自动提升熟练度成功');
+      const outcome = await this.vocabularyService.autoIncreaseFamiliarity(word, userId);
       return {
         success: true,
         message: `Familiarity level increased for word "${word}"`,
+        family: outcome.kind === 'updated' ? outcome.family : undefined,
       };
     } catch (error) {
       console.error('[VocabularyController] 自动提升熟练度失败:', error);
-      console.error('[VocabularyController] 错误详情:', {
-        word,
-        userId: req.user?.id,
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
       return {
         success: false,
         message: `Failed to increase familiarity: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -220,6 +213,14 @@ export class VocabularyController {
     const userId = req.user.id;
     const jsonContent = file.buffer.toString('utf-8');
     return this.vocabularyService.importVocabularyFromJson(jsonContent, userId);
+  }
+
+  // 全量同步：扩展端启动 / 登录时拉一次，用作本地词库镜像。
+  // 不分页——一个用户的词族数量级在 1k~10k 间，一次拉完最简单。
+  @Get('sync')
+  async syncVocabulary(@Request() req): Promise<VocabularySyncResponse> {
+    const userId = req.user.id;
+    return this.vocabularyService.syncVocabulary(userId);
   }
 
   @Get('health')
