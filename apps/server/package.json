@@ -19,9 +19,9 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "seed": "ts-node src/seed.ts",
-    "seed:dictionary": "ts-node src/seed-dictionary.ts",
-    "seed:tags": "ts-node src/seed-tags.ts"
+    "seed": "node --env-file=.env --require ts-node/register src/seed.ts",
+    "seed:dictionary": "node --env-file=.env --require ts-node/register src/seed-dictionary.ts",
+    "seed:tags": "node --env-file=.env --require ts-node/register src/seed-tags.ts"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
