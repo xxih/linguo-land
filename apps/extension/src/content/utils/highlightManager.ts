@@ -174,6 +174,49 @@ export class HighlightManager {
   }
 
   /**
+   * 移除某个子树内所有高亮（characterData 增量重扫前用）。
+   * 用 TreeWalker 走 element 的 Text 后代，逐个查 itemsByNode。
+   * 子树通常是单节点 span，比对全文 registry 全表扫便宜得多。
+   */
+  removeHighlightsInSubtree(element: Element): void {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const itemsToRemove: HighlightInfo[] = [];
+
+    let current = walker.nextNode();
+    while (current) {
+      const list = this.itemsByNode.get(current as Text);
+      if (list && list.length > 0) {
+        itemsToRemove.push(...list);
+        this.itemsByNode.delete(current as Text);
+      }
+      current = walker.nextNode();
+    }
+
+    if (itemsToRemove.length === 0) return;
+
+    const removeSet = new Set(itemsToRemove);
+    for (const item of itemsToRemove) {
+      if (item.status === 'unknown') {
+        this.registry.unknownHighlight.delete(item.range);
+      } else if (item.status === 'learning') {
+        this.registry.learningHighlight.delete(item.range);
+      }
+    }
+    this.registry.items = this.registry.items.filter((i) => !removeSet.has(i));
+
+    CSS.highlights.set('lang-helper--unknown', this.registry.unknownHighlight);
+    CSS.highlights.set('lang-helper--learning', this.registry.learningHighlight);
+
+    if (
+      this.registry.hoveredWord &&
+      itemsToRemove.some((item) => item.lemmas.includes(this.registry.hoveredWord!))
+    ) {
+      this.registry.hoveredWord = null;
+      this.updateHoverHighlight();
+    }
+  }
+
+  /**
    * 清空所有高亮 (公共接口别名)
    */
   clearAllHighlights(): void {

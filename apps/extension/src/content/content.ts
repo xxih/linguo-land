@@ -370,27 +370,35 @@ function setupDOMObserver(): void {
   };
 
   // 常规内容处理（通过 debounce）
-  const processRegularContent = debounce((needsFullScan: boolean, elements: HTMLElement[]) => {
-    if (needsFullScan) {
-      logger.debug('Character data change detected, full rescan required');
-      scanAndHighlight();
-    } else if (elements.length > 0) {
-      logger.debug('Incremental changes detected, scanning new nodes only', {
-        elementCount: elements.length,
-      });
-      scanAndHighlightNodes(elements);
-    }
-  }, 500);
+  // characterDataElements 跟 addedElements 分开传：前者需要先清掉子树旧高亮再扫，
+  // 后者是新挂上来的子树直接扫即可。
+  const processRegularContent = debounce(
+    (addedElements: HTMLElement[], characterDataElements: HTMLElement[]) => {
+      // 先清掉 characterData 受影响子树的旧高亮（旧 offset 已经失效），再统一增量扫
+      for (const el of characterDataElements) {
+        highlightManager.removeHighlightsInSubtree(el);
+      }
+      const all = [...addedElements, ...characterDataElements];
+      if (all.length > 0) {
+        logger.debug('Incremental changes detected, scanning subset only', {
+          addedCount: addedElements.length,
+          characterDataCount: characterDataElements.length,
+        });
+        scanAndHighlightNodes(all);
+      }
+    },
+    500,
+  );
 
   const observer = new MutationObserver((mutations: MutationRecord[]) => {
     // 如果正在处理中，忽略所有变化
     const processingState = debugUtils.getProcessingState();
     if (processingState.isProcessing) return;
 
-    // 标志：是否需要全量扫描
-    let needsFullScan = false;
     // 收集所有新增的元素节点
     const addedElements: HTMLElement[] = [];
+    // 收集 characterData 变化的父元素：先清子树旧高亮再扫，避免 offset 错位 / 重复高亮
+    const characterDataParents = new Set<HTMLElement>();
     // 标志：是否有字幕变化
     let hasSubtitleChange = false;
 
@@ -408,8 +416,9 @@ function setupDOMObserver(): void {
               elementClass: container.className,
             });
           }
-        } else {
-          needsFullScan = true;
+        } else if (parentElement) {
+          // 旧实现：触发整树重扫，长文里非常贵；改成只扫这一小撮被改的父元素
+          characterDataParents.add(parentElement);
         }
         return;
       }
@@ -514,8 +523,8 @@ function setupDOMObserver(): void {
     }
 
     // 常规内容变化 - 使用标准 debounce（500ms）
-    if (needsFullScan || addedElements.length > 0) {
-      processRegularContent(needsFullScan, addedElements);
+    if (addedElements.length > 0 || characterDataParents.size > 0) {
+      processRegularContent(addedElements, Array.from(characterDataParents));
     }
   });
 

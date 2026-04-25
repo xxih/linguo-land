@@ -32,7 +32,7 @@
   - 现状：每次点击/悬停遍历所有 `registry.items`，每项再 `getClientRects()`。5000 高亮 → 每次点击 5000 次几何查询。
   - 改进方向：用 `document.caretPositionFromPoint(x, y)` 拿到落点 Text 节点 + offset，再用 `Map<Text, HighlightInfo[]>` 反查，O(n) → O(1)。
 
-- **全量重扫无缓存，SPA 切路由 / 虚拟滚动反复整树扫**
+- ~~**全量重扫无缓存，SPA 切路由 / 虚拟滚动反复整树扫**~~ ✅ 落地于 [ADR 0014](adr/0014-incremental-character-data-and-lemma-cache.md)
   - 位置：`src/content/content.ts`（`extractTextNodes(document.body)`）
   - 改进方向：以 Text 节点为 key 缓存 `{textHash → tokens}`，MutationObserver 增量只处理 diff 节点。
 

@@ -12,6 +12,13 @@ export class TextProcessor {
   private static readonly logger = new Logger('TextProcessor');
 
   /**
+   * 词形还原结果缓存。同一词形（小写后）在 SPA / 长文滚动 / 字幕循环里
+   * 会反复出现，nlp(word) 是热点；命中即跳过 compromise 整套调用。
+   * 英文活跃词汇有限，不做容量上限——长尾未知词的占用可忽略。
+   */
+  private static readonly lemmaCache: Map<string, string[]> = new Map();
+
+  /**
    * 检查元素是否可见。
    *
    * 旧实现对每个祖先调用 `getComputedStyle` + 最后再 `getBoundingClientRect`，
@@ -224,6 +231,10 @@ export class TextProcessor {
    * 使用 compromise 获取单词的所有可能词元
    */
   private static getLemmasForWord(word: string): string[] {
+    const cacheKey = word.toLowerCase();
+    const cached = this.lemmaCache.get(cacheKey);
+    if (cached) return cached;
+
     const doc = nlp(word);
     const lemmas = new Set<string>();
 
@@ -410,7 +421,9 @@ export class TextProcessor {
       originalWord: word,
       lemmas: Array.from(lemmas),
     });
-    return Array.from(lemmas);
+    const result = Array.from(lemmas);
+    this.lemmaCache.set(cacheKey, result);
+    return result;
   }
 
   /**
