@@ -12,26 +12,53 @@ export class TextProcessor {
   private static readonly logger = new Logger('TextProcessor');
 
   /**
-   * 词形还原结果缓存。同一词形（小写后）在 SPA / 长文滚动 / 字幕循环里
-   * 会反复出现，nlp(word) 是热点；命中即跳过 compromise 整套调用。
-   * 英文活跃词汇有限，不做容量上限——长尾未知词的占用可忽略。
+   * 词形还原结果缓存。同一词形（小写后）在 SPA / 长文滚动 / 字幕循环里反复出现，
+   * 命中即跳过查表 + 后缀验证整套流程。英文活跃词汇有限，不做容量上限。
    */
   private static readonly lemmaCache: Map<string, string[]> = new Map();
 
   /**
-   * 副词→形容词不规则映射（如 happily → happy）。
-   *
-   * 数据由后端 GET /api/v1/dictionary-whitelist 一并返回（ADR 0011 + 后续扩展），
-   * `setAdverbMap` 在 content 拿到 DictionaryLoader.initialize 结果时注入。
-   * 远端缺失或还没拉到时退回 `null`，`getLemmasForWord` 仍可走 -ly 后缀启发式。
+   * 远端下发的形态学不规则映射表。数据来源都是后端 `GET /api/v1/dictionary-whitelist`
+   * 一并返回（ADR 0011 / 0016 / 0017），content.ts 在 DictionaryLoader 拿到结果后
+   * 通过 `setInflectionMaps` 注入。远端缺失/还没拉到时退回 null，`getLemmasForWord`
+   * 仍能靠后缀剥除规则 + 词典验证拿到合理候选集。
    */
   private static adverbMap: Record<string, string> | null = null;
+  private static verbInflectionMap: Record<string, string> | null = null;
+  private static nounInflectionMap: Record<string, string> | null = null;
+  private static adjInflectionMap: Record<string, string> | null = null;
+  /**
+   * 词典白名单镜像（同 DictionaryLoader 内部那份）。词形还原后缀规则需要它做候选
+   * 验证：`runn` 不是词、`run` 是词，所以 `running → run` 才是正解。注入后
+   * `dictionaryHas` 才有数据；为空时跳过所有需要验证的剥除分支。
+   */
+  private static dictionarySet: Set<string> | null = null;
 
   /** 由 content.ts 在 DictionaryLoader 拿到 adverbMap 后调用，注入到本类。 */
   static setAdverbMap(map: Record<string, string> | null): void {
     this.adverbMap = map;
-    // 副词映射变化会影响词形还原结果，缓存必须清空
     this.lemmaCache.clear();
+  }
+
+  /**
+   * 由 content.ts 注入：动/名/形不规则变形 map + 用于后缀剥除验证的词典 Set。
+   * 任意一个变化都意味着 lemma 结果会变，缓存必须一起清。
+   */
+  static setInflectionMaps(maps: {
+    verbInflectionMap?: Record<string, string> | null;
+    nounInflectionMap?: Record<string, string> | null;
+    adjInflectionMap?: Record<string, string> | null;
+    dictionarySet?: Set<string> | null;
+  }): void {
+    if ('verbInflectionMap' in maps) this.verbInflectionMap = maps.verbInflectionMap ?? null;
+    if ('nounInflectionMap' in maps) this.nounInflectionMap = maps.nounInflectionMap ?? null;
+    if ('adjInflectionMap' in maps) this.adjInflectionMap = maps.adjInflectionMap ?? null;
+    if ('dictionarySet' in maps) this.dictionarySet = maps.dictionarySet ?? null;
+    this.lemmaCache.clear();
+  }
+
+  private static dictionaryHas(word: string): boolean {
+    return this.dictionarySet?.has(word) ?? false;
   }
 
   /**
@@ -243,68 +270,106 @@ export class TextProcessor {
   }
 
   /**
-   * 【核心重构方法】
-   * 使用 compromise 获取单词的所有可能词元
+   * 词形还原（rule-based + 后端不规则映射，ADR 0017）
+   *
+   * 算法分四层，每层往候选集追加（不互斥）：
+   *   1. 原词本身——很多 form 自身就是 base form（go / run / read），直接进候选
+   *   2. 不规则映射查表：动/名/形三表（来自 wink-lexicon 的 WordNet 数据，~5500 条）
+   *      覆盖 went→go, broken→break, children→child, better→good, worst→bad ...
+   *   3. 副词路径：adverbMap 不规则查表 + -ly 后缀启发式（保留旧行为）
+   *   4. 后缀剥除规则 + 字典验证（参 wink-lemmatizer 的 morphy 算法）：
+   *      - 比较级/最高级 -er / -est：bigger→big, faster→fast
+   *      - 进行时 -ing：running→run, making→make
+   *      - 过去式 -ed / 三单 -es / -s：stopped→stop, called→call, dogs→dog
+   *      - -ies / -ied → -y：cities→city, studied→study
+   *      每条规则三种解码：直接剥、剥后加 e（rated→rate）、双辅音还原（stopped→stop）
+   *      解码后用 dictionarySet 验证，过则进候选。
+   *
+   * 候选集是 OR 关系——下游 dictionaryLoader.isValidWord(lemma) 只要任一命中即认为
+   * 这个 form 是合法词。所以即便规则给出多个错误候选也无害，关键是 base form 能进。
    */
   private static getLemmasForWord(word: string): string[] {
     const cacheKey = word.toLowerCase();
     const cached = this.lemmaCache.get(cacheKey);
     if (cached) return cached;
 
-    const doc = nlp(word);
+    const w = cacheKey;
     const lemmas = new Set<string>();
+    lemmas.add(w);
 
-    // 1. 获取基本词元
-    const root = doc.verbs().toInfinitive().text() || doc.nouns().toSingular().text();
-    if (root) {
-      lemmas.add(root.toLowerCase());
+    // 1. 不规则映射 O(1) 查表
+    const v = this.verbInflectionMap?.[w];
+    if (v) lemmas.add(v);
+    const n = this.nounInflectionMap?.[w];
+    if (n) lemmas.add(n);
+    const a = this.adjInflectionMap?.[w];
+    if (a) lemmas.add(a);
+
+    // 2. 副词路径
+    const advRoot = this.adverbMap?.[w];
+    if (advRoot) {
+      lemmas.add(advRoot);
+    } else if (w.endsWith('ly') && w.length > 4) {
+      const stem = w.slice(0, -2);
+      if (this.dictionaryHas(stem)) lemmas.add(stem);
+      if (this.dictionaryHas(stem + 'e')) lemmas.add(stem + 'e');
     }
 
-    // 2. 处理形容词/副词 (例如 'frequently' -> 'frequent')
-    if (doc.has('#Adverb')) {
-      const wordLower = word.toLowerCase();
-      const remoteMapping = this.adverbMap?.[wordLower];
-
-      // 优先用后端下发的映射（不规则变形 happily→happy 等）
-      if (remoteMapping) {
-        const adjDoc = nlp(remoteMapping);
-        if (adjDoc.has('#Adjective')) {
-          lemmas.add(remoteMapping);
-        }
-      }
-      // 后端没覆盖到的话，按 -ly 后缀启发式做兜底
-      else if (wordLower.endsWith('ly') && wordLower.length > 4) {
-        const potentialAdjective = wordLower.slice(0, -2);
-        // 使用 compromise 验证移除 -ly 后是否是有效的形容词
-        const adjDoc = nlp(potentialAdjective);
-        if (adjDoc.has('#Adjective')) {
-          lemmas.add(potentialAdjective);
-          this.logger.debug('Adverb to adjective conversion', {
-            adverb: wordLower,
-            adjective: potentialAdjective,
-          });
-        }
-      }
+    // 3. -ies / -ied → -y（cities → city, studied → study）。先于通用 -ed/-s 规则，
+    // 否则会先剥成 stud/cit，错过 study/city。
+    if (w.length > 4 && (w.endsWith('ies') || w.endsWith('ied'))) {
+      const yStem = w.slice(0, -3) + 'y';
+      if (this.dictionaryHas(yStem)) lemmas.add(yStem);
     }
 
-    // 3. 处理形容词的基本形式
-    const adjRoot = doc.adjectives().json();
-    if (adjRoot.length > 0) {
-      lemmas.add(adjRoot[0].text.toLowerCase());
+    // 4. -es ↔ -is（拉丁/希腊系学术词复数：axes→axis, analyses→analysis,
+    // crises→crisis, hypotheses→hypothesis）
+    if (w.length >= 4 && w.endsWith('es')) {
+      const isStem = w.slice(0, -2) + 'is';
+      if (this.dictionaryHas(isStem)) lemmas.add(isStem);
     }
 
-    // 4. 添加原始词的小写形式作为后备
-    if (lemmas.size === 0) {
-      lemmas.add(word.toLowerCase());
+    // 5. -men ↔ -man（chairmen→chairman, firemen→fireman, gentlemen→gentleman）
+    if (w.length >= 5 && w.endsWith('men')) {
+      const manStem = w.slice(0, -3) + 'man';
+      if (this.dictionaryHas(manStem)) lemmas.add(manStem);
     }
 
-    this.logger.debug('Word lemmatization result', {
-      originalWord: word,
-      lemmas: Array.from(lemmas),
-    });
+    // 6. 通用后缀剥除（按"剥得越长越优先"排序）
+    this.tryStripSuffix(w, 'est', lemmas);
+    this.tryStripSuffix(w, 'ing', lemmas);
+    this.tryStripSuffix(w, 'ed', lemmas);
+    this.tryStripSuffix(w, 'er', lemmas);
+    this.tryStripSuffix(w, 'es', lemmas);
+    this.tryStripSuffix(w, 's', lemmas);
+
     const result = Array.from(lemmas);
     this.lemmaCache.set(cacheKey, result);
     return result;
+  }
+
+  /**
+   * 试剥单后缀，三种解码都用字典验证：
+   *   - stem 直接匹配（called → call）
+   *   - stem + 'e'（rated → rate, hated → hate）
+   *   - 末尾双辅音还原（stopped → stop, controlled → control, bigger → big）
+   */
+  private static tryStripSuffix(word: string, suffix: string, out: Set<string>): void {
+    if (!word.endsWith(suffix) || word.length <= suffix.length + 1) return;
+    const stem = word.slice(0, -suffix.length);
+
+    if (this.dictionaryHas(stem)) out.add(stem);
+    if (this.dictionaryHas(stem + 'e')) out.add(stem + 'e');
+
+    if (stem.length >= 3) {
+      const last = stem[stem.length - 1];
+      const secondLast = stem[stem.length - 2];
+      // 仅当末尾是同辅音双写（stopp / bigg / controll）才尝试还原
+      if (last === secondLast && !'aeiou'.includes(last)) {
+        const undoubled = stem.slice(0, -1);
+        if (this.dictionaryHas(undoubled)) out.add(undoubled);
+      }
+    }
   }
 
   /**

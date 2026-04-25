@@ -66,10 +66,26 @@ async function initializeManagers(ctx: ContentScriptContext): Promise<void> {
   dictionaryLoader = DictionaryLoader.getInstance();
   const loadResult = await dictionaryLoader.initialize();
   if (loadResult.ok) {
-    // 后端下发的副词→形容词映射注入 textProcessor，新增不规则变形不需发扩展新版
+    // 后端下发的形态学映射 + 白名单 Set 一并注入 textProcessor。新增条目热更生效，
+    // 不需发扩展新版本（ADR 0011 / 0016 / 0017）。
     TextProcessor.setAdverbMap(loadResult.adverbMap ?? null);
+    TextProcessor.setInflectionMaps({
+      verbInflectionMap: loadResult.verbInflectionMap ?? null,
+      nounInflectionMap: loadResult.nounInflectionMap ?? null,
+      adjInflectionMap: loadResult.adjInflectionMap ?? null,
+      dictionarySet: dictionaryLoader.getWhitelistSet(),
+    });
     logger.info('Dictionary loader initialized', {
       adverbMapSize: loadResult.adverbMap ? Object.keys(loadResult.adverbMap).length : 0,
+      verbInflectionSize: loadResult.verbInflectionMap
+        ? Object.keys(loadResult.verbInflectionMap).length
+        : 0,
+      nounInflectionSize: loadResult.nounInflectionMap
+        ? Object.keys(loadResult.nounInflectionMap).length
+        : 0,
+      adjInflectionSize: loadResult.adjInflectionMap
+        ? Object.keys(loadResult.adjInflectionMap).length
+        : 0,
     });
   } else {
     logger.error('Dictionary load failed', new Error(loadResult.error ?? 'unknown'));

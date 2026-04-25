@@ -1,0 +1,1564 @@
+[
+  {
+    "category": "verb-past-irregular",
+    "word": "had",
+    "expectedLemmas": [
+      "have"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "made",
+    "expectedLemmas": [
+      "make",
+      "made"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "did",
+    "expectedLemmas": [
+      "do",
+      "de",
+      "did"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "got",
+    "expectedLemmas": [
+      "get",
+      "got"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "thought",
+    "expectedLemmas": [
+      "think",
+      "thought"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "held",
+    "expectedLemmas": [
+      "hold"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "came",
+    "expectedLemmas": [
+      "come",
+      "came",
+      "cum"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "sent",
+    "expectedLemmas": [
+      "send",
+      "sent"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "went",
+    "expectedLemmas": [
+      "go",
+      "went"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "took",
+    "expectedLemmas": [
+      "take"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "built",
+    "expectedLemmas": [
+      "build",
+      "built"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "paid",
+    "expectedLemmas": [
+      "pay",
+      "paid"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "told",
+    "expectedLemmas": [
+      "tell"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "wrote",
+    "expectedLemmas": [
+      "write"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "submitted",
+    "expectedLemmas": [
+      "submit"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "saw",
+    "expectedLemmas": [
+      "see",
+      "saw"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "sold",
+    "expectedLemmas": [
+      "sell",
+      "sold"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "met",
+    "expectedLemmas": [
+      "meet",
+      "met"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "brought",
+    "expectedLemmas": [
+      "bring"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "rose",
+    "expectedLemmas": [
+      "rose",
+      "rise"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "began",
+    "expectedLemmas": [
+      "begin"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "became",
+    "expectedLemmas": [
+      "become"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "gave",
+    "expectedLemmas": [
+      "give"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "felt",
+    "expectedLemmas": [
+      "feel",
+      "felt"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "logged",
+    "expectedLemmas": [
+      "log"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "forgot",
+    "expectedLemmas": [
+      "forget"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "knew",
+    "expectedLemmas": [
+      "know"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "bought",
+    "expectedLemmas": [
+      "buy",
+      "bought"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "won",
+    "expectedLemmas": [
+      "win",
+      "won"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "spent",
+    "expectedLemmas": [
+      "spent",
+      "spend"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "referred",
+    "expectedLemmas": [
+      "refer"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "kept",
+    "expectedLemmas": [
+      "keep"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "controlled",
+    "expectedLemmas": [
+      "control",
+      "controlled"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "committed",
+    "expectedLemmas": [
+      "committed",
+      "commit"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "planned",
+    "expectedLemmas": [
+      "plan",
+      "planned"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "preferred",
+    "expectedLemmas": [
+      "preferred",
+      "prefer"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "occurred",
+    "expectedLemmas": [
+      "occur"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "meant",
+    "expectedLemmas": [
+      "mean"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "caught",
+    "expectedLemmas": [
+      "catch",
+      "caught"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "shipped",
+    "expectedLemmas": [
+      "ship",
+      "shipped"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "lay",
+    "expectedLemmas": [
+      "lay",
+      "lie"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "taught",
+    "expectedLemmas": [
+      "teach"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "permitted",
+    "expectedLemmas": [
+      "permit"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "fell",
+    "expectedLemmas": [
+      "fall",
+      "fell"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "stopped",
+    "expectedLemmas": [
+      "stop",
+      "stopped"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "laid",
+    "expectedLemmas": [
+      "lay",
+      "laid"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "sought",
+    "expectedLemmas": [
+      "seek"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "dropped",
+    "expectedLemmas": [
+      "drop"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "fed",
+    "expectedLemmas": [
+      "feed",
+      "fed"
+    ]
+  },
+  {
+    "category": "verb-past-irregular",
+    "word": "understood",
+    "expectedLemmas": [
+      "understand",
+      "understood"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "used",
+    "expectedLemmas": [
+      "use",
+      "used"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "posted",
+    "expectedLemmas": [
+      "post"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "provided",
+    "expectedLemmas": [
+      "provide"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "added",
+    "expectedLemmas": [
+      "add"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "listed",
+    "expectedLemmas": [
+      "list",
+      "listed"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "updated",
+    "expectedLemmas": [
+      "update"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "called",
+    "expectedLemmas": [
+      "call"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "included",
+    "expectedLemmas": [
+      "include"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "received",
+    "expectedLemmas": [
+      "received",
+      "receive"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "registered",
+    "expectedLemmas": [
+      "register",
+      "registered"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "created",
+    "expectedLemmas": [
+      "create"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "started",
+    "expectedLemmas": [
+      "start"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "asked",
+    "expectedLemmas": [
+      "ask"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "featured",
+    "expectedLemmas": [
+      "featured",
+      "feature"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "associated",
+    "expectedLemmas": [
+      "associated",
+      "associate"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "developed",
+    "expectedLemmas": [
+      "developed",
+      "develop"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "rated",
+    "expectedLemmas": [
+      "rate",
+      "rated"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "joined",
+    "expectedLemmas": [
+      "join"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "completed",
+    "expectedLemmas": [
+      "complete",
+      "completed"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "reported",
+    "expectedLemmas": [
+      "report"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "released",
+    "expectedLemmas": [
+      "release"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "defined",
+    "expectedLemmas": [
+      "defined",
+      "define"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "established",
+    "expectedLemmas": [
+      "established",
+      "establish"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "offered",
+    "expectedLemmas": [
+      "offer"
+    ]
+  },
+  {
+    "category": "verb-past-regular",
+    "word": "increased",
+    "expectedLemmas": [
+      "increase"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "had",
+    "expectedLemmas": [
+      "have"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "made",
+    "expectedLemmas": [
+      "make",
+      "made"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "got",
+    "expectedLemmas": [
+      "get",
+      "got"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "given",
+    "expectedLemmas": [
+      "give",
+      "given"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "done",
+    "expectedLemmas": [
+      "do",
+      "done"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "written",
+    "expectedLemmas": [
+      "write",
+      "written"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "taken",
+    "expectedLemmas": [
+      "take",
+      "taken"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "known",
+    "expectedLemmas": [
+      "know",
+      "known"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "thought",
+    "expectedLemmas": [
+      "think",
+      "thought"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "seen",
+    "expectedLemmas": [
+      "see",
+      "seen"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "held",
+    "expectedLemmas": [
+      "hold"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "sent",
+    "expectedLemmas": [
+      "send",
+      "sent"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "shown",
+    "expectedLemmas": [
+      "show"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "built",
+    "expectedLemmas": [
+      "build",
+      "built"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "paid",
+    "expectedLemmas": [
+      "pay",
+      "paid"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "told",
+    "expectedLemmas": [
+      "tell"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "submitted",
+    "expectedLemmas": [
+      "submit"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "sold",
+    "expectedLemmas": [
+      "sell",
+      "sold"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "met",
+    "expectedLemmas": [
+      "meet",
+      "met"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "brought",
+    "expectedLemmas": [
+      "bring"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "gone",
+    "expectedLemmas": [
+      "go",
+      "gone"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "felt",
+    "expectedLemmas": [
+      "feel",
+      "felt"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "logged",
+    "expectedLemmas": [
+      "log"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "bought",
+    "expectedLemmas": [
+      "buy",
+      "bought"
+    ]
+  },
+  {
+    "category": "verb-pp-irregular",
+    "word": "broken",
+    "expectedLemmas": [
+      "break",
+      "broken"
+    ]
+  },
+  {
+    "category": "verb-pp-regular",
+    "word": "used",
+    "expectedLemmas": [
+      "use",
+      "used"
+    ]
+  },
+  {
+    "category": "verb-pp-regular",
+    "word": "posted",
+    "expectedLemmas": [
+      "post"
+    ]
+  },
+  {
+    "category": "verb-pp-regular",
+    "word": "provided",
+    "expectedLemmas": [
+      "provide"
+    ]
+  },
+  {
+    "category": "verb-pp-regular",
+    "word": "added",
+    "expectedLemmas": [
+      "add"
+    ]
+  },
+  {
+    "category": "verb-pp-regular",
+    "word": "listed",
+    "expectedLemmas": [
+      "list",
+      "listed"
+    ]
+  },
+  {
+    "category": "verb-pp-regular",
+    "word": "updated",
+    "expectedLemmas": [
+      "update"
+    ]
+  },
+  {
+    "category": "verb-pp-regular",
+    "word": "called",
+    "expectedLemmas": [
+      "call"
+    ]
+  },
+  {
+    "category": "verb-pp-regular",
+    "word": "included",
+    "expectedLemmas": [
+      "include"
+    ]
+  },
+  {
+    "category": "verb-ing-irregular",
+    "word": "shopping",
+    "expectedLemmas": [
+      "shop",
+      "shopping"
+    ]
+  },
+  {
+    "category": "verb-ing-irregular",
+    "word": "planning",
+    "expectedLemmas": [
+      "plan",
+      "planning"
+    ]
+  },
+  {
+    "category": "verb-ing-irregular",
+    "word": "getting",
+    "expectedLemmas": [
+      "get",
+      "getting"
+    ]
+  },
+  {
+    "category": "verb-ing-irregular",
+    "word": "wedding",
+    "expectedLemmas": [
+      "wed",
+      "wedding"
+    ]
+  },
+  {
+    "category": "verb-ing-irregular",
+    "word": "programming",
+    "expectedLemmas": [
+      "program",
+      "programming"
+    ]
+  },
+  {
+    "category": "verb-ing-irregular",
+    "word": "beginning",
+    "expectedLemmas": [
+      "beginning",
+      "begin"
+    ]
+  },
+  {
+    "category": "verb-ing-irregular",
+    "word": "setting",
+    "expectedLemmas": [
+      "set",
+      "setting"
+    ]
+  },
+  {
+    "category": "verb-ing-irregular",
+    "word": "winning",
+    "expectedLemmas": [
+      "win",
+      "winning"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "using",
+    "expectedLemmas": [
+      "use",
+      "using"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "including",
+    "expectedLemmas": [
+      "include"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "rating",
+    "expectedLemmas": [
+      "rating",
+      "rate"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "listing",
+    "expectedLemmas": [
+      "list",
+      "listing"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "going",
+    "expectedLemmas": [
+      "go",
+      "going"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "looking",
+    "expectedLemmas": [
+      "look",
+      "looking"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "working",
+    "expectedLemmas": [
+      "work",
+      "working"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "building",
+    "expectedLemmas": [
+      "building",
+      "build"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "making",
+    "expectedLemmas": [
+      "make",
+      "making"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "meeting",
+    "expectedLemmas": [
+      "meeting",
+      "meet"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "learning",
+    "expectedLemmas": [
+      "learn",
+      "learning"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "marketing",
+    "expectedLemmas": [
+      "market",
+      "marketing"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "having",
+    "expectedLemmas": [
+      "have",
+      "having"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "living",
+    "expectedLemmas": [
+      "live",
+      "living"
+    ]
+  },
+  {
+    "category": "verb-ing-regular",
+    "word": "reading",
+    "expectedLemmas": [
+      "read",
+      "reading"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "has",
+    "expectedLemmas": [
+      "have"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "services",
+    "expectedLemmas": [
+      "service"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "its",
+    "expectedLemmas": [
+      "it",
+      "its"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "rights",
+    "expectedLemmas": [
+      "right"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "books",
+    "expectedLemmas": [
+      "book"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "links",
+    "expectedLemmas": [
+      "links",
+      "link"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "items",
+    "expectedLemmas": [
+      "item"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "does",
+    "expectedLemmas": [
+      "do"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "reviews",
+    "expectedLemmas": [
+      "review"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "games",
+    "expectedLemmas": [
+      "game"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "days",
+    "expectedLemmas": [
+      "day"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "states",
+    "expectedLemmas": [
+      "state"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "prices",
+    "expectedLemmas": [
+      "price"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "pages",
+    "expectedLemmas": [
+      "page"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "members",
+    "expectedLemmas": [
+      "member"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "posts",
+    "expectedLemmas": [
+      "post"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "pictures",
+    "expectedLemmas": [
+      "picture"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "times",
+    "expectedLemmas": [
+      "time",
+      "times"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "sites",
+    "expectedLemmas": [
+      "site"
+    ]
+  },
+  {
+    "category": "verb-3sg",
+    "word": "events",
+    "expectedLemmas": [
+      "event"
+    ]
+  },
+  {
+    "category": "noun-plural-irregular",
+    "word": "men",
+    "expectedLemmas": [
+      "man",
+      "men"
+    ]
+  },
+  {
+    "category": "noun-plural-irregular",
+    "word": "knives",
+    "expectedLemmas": [
+      "knife"
+    ]
+  },
+  {
+    "category": "noun-plural-irregular",
+    "word": "quizzes",
+    "expectedLemmas": [
+      "quiz"
+    ]
+  },
+  {
+    "category": "noun-plural-irregular",
+    "word": "wolves",
+    "expectedLemmas": [
+      "wolf"
+    ]
+  },
+  {
+    "category": "noun-plural-irregular",
+    "word": "axes",
+    "expectedLemmas": [
+      "axis"
+    ]
+  },
+  {
+    "category": "noun-plural-irregular",
+    "word": "halves",
+    "expectedLemmas": [
+      "half"
+    ]
+  },
+  {
+    "category": "noun-plural-irregular",
+    "word": "chairmen",
+    "expectedLemmas": [
+      "chairman"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "its",
+    "expectedLemmas": [
+      "it",
+      "its"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "links",
+    "expectedLemmas": [
+      "links",
+      "link"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "years",
+    "expectedLemmas": [
+      "year"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "items",
+    "expectedLemmas": [
+      "item"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "reviews",
+    "expectedLemmas": [
+      "review"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "days",
+    "expectedLemmas": [
+      "day"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "hotels",
+    "expectedLemmas": [
+      "hotel"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "states",
+    "expectedLemmas": [
+      "state"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "prices",
+    "expectedLemmas": [
+      "price"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "pages",
+    "expectedLemmas": [
+      "page"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "members",
+    "expectedLemmas": [
+      "member"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "systems",
+    "expectedLemmas": [
+      "system"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "posts",
+    "expectedLemmas": [
+      "post"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "pictures",
+    "expectedLemmas": [
+      "picture"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "students",
+    "expectedLemmas": [
+      "student"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "sites",
+    "expectedLemmas": [
+      "site"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "events",
+    "expectedLemmas": [
+      "event"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "movies",
+    "expectedLemmas": [
+      "movie"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "jobs",
+    "expectedLemmas": [
+      "job"
+    ]
+  },
+  {
+    "category": "noun-plural-regular",
+    "word": "categories",
+    "expectedLemmas": [
+      "category"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "better",
+    "expectedLemmas": [
+      "good",
+      "well",
+      "better",
+      "known"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "further",
+    "expectedLemmas": [
+      "away",
+      "further",
+      "front"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "later",
+    "expectedLemmas": [
+      "late"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "higher",
+    "expectedLemmas": [
+      "high",
+      "higher"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "lower",
+    "expectedLemmas": [
+      "low",
+      "lower"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "larger",
+    "expectedLemmas": [
+      "large"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "greater",
+    "expectedLemmas": [
+      "great"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "longer",
+    "expectedLemmas": [
+      "long",
+      "longer"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "earlier",
+    "expectedLemmas": [
+      "early"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "faster",
+    "expectedLemmas": [
+      "fast",
+      "faster"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "smaller",
+    "expectedLemmas": [
+      "small"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "worse",
+    "expectedLemmas": [
+      "bad",
+      "worse"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "closer",
+    "expectedLemmas": [
+      "close",
+      "closer"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "bigger",
+    "expectedLemmas": [
+      "big",
+      "bigger"
+    ]
+  },
+  {
+    "category": "adj-comparative",
+    "word": "younger",
+    "expectedLemmas": [
+      "young",
+      "younger"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "best",
+    "expectedLemmas": [
+      "best",
+      "good",
+      "well"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "highest",
+    "expectedLemmas": [
+      "high"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "largest",
+    "expectedLemmas": [
+      "large"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "lowest",
+    "expectedLemmas": [
+      "low"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "greatest",
+    "expectedLemmas": [
+      "great"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "biggest",
+    "expectedLemmas": [
+      "big"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "worst",
+    "expectedLemmas": [
+      "bad",
+      "worst"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "nearest",
+    "expectedLemmas": [
+      "near"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "finest",
+    "expectedLemmas": [
+      "fine"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "cheapest",
+    "expectedLemmas": [
+      "cheap"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "hottest",
+    "expectedLemmas": [
+      "hot"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "fastest",
+    "expectedLemmas": [
+      "fast"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "soonest",
+    "expectedLemmas": [
+      "soon"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "closest",
+    "expectedLemmas": [
+      "close"
+    ]
+  },
+  {
+    "category": "adj-superlative",
+    "word": "longest",
+    "expectedLemmas": [
+      "long"
+    ]
+  }
+]

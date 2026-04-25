@@ -136,10 +136,20 @@ export interface DictionaryWhitelistResponse {
   version?: string;
   syncedAt?: string;
   /**
-   * 副词→形容词映射（如 happily → happy）。客户端 textProcessor 用它做不规则变形
-   * 的词形还原；后端单独维护，hot-update 不需要发扩展新版本。
+   * 副词→形容词映射（如 happily → happy）。客户端 textProcessor 用它做不规则
+   * 变形的词形还原；后端单独维护，hot-update 不需要发扩展新版本。
    */
   adverbMap?: Record<string, string>;
+  /**
+   * 动词不规则变形→原形（broken→break, left→leave, ran→run）。数据派生自
+   * wink-lexicon / WordNet（BSD 兼容许可），客户端 textProcessor 查表 + 后缀
+   * 规则做词形还原，配合本地白名单做候选验证（ADR 0017）。
+   */
+  verbInflectionMap?: Record<string, string>;
+  /** 名词不规则复数→单数（children→child, mice→mouse）。详见 verbInflectionMap。 */
+  nounInflectionMap?: Record<string, string>;
+  /** 形容词不规则比较级/最高级→原形（better→good, worst→bad）。详见 verbInflectionMap。 */
+  adjInflectionMap?: Record<string, string>;
   error?: string;
 }
 

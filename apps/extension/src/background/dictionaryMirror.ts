@@ -8,6 +8,9 @@ interface RemoteSnapshot {
   version: string;
   words: string[];
   adverbMap?: Record<string, string>;
+  verbInflectionMap?: Record<string, string>;
+  nounInflectionMap?: Record<string, string>;
+  adjInflectionMap?: Record<string, string>;
 }
 
 interface PersistedSnapshot extends RemoteSnapshot {
@@ -20,6 +23,9 @@ export interface DictionaryWhitelistResult {
   version?: string;
   syncedAt?: string;
   adverbMap?: Record<string, string>;
+  verbInflectionMap?: Record<string, string>;
+  nounInflectionMap?: Record<string, string>;
+  adjInflectionMap?: Record<string, string>;
   error?: string;
 }
 
@@ -109,6 +115,9 @@ export class DictionaryMirror {
           version: data.version,
           words: data.words,
           adverbMap: data.adverbMap,
+          verbInflectionMap: data.verbInflectionMap,
+          nounInflectionMap: data.nounInflectionMap,
+          adjInflectionMap: data.adjInflectionMap,
           syncedAt: new Date().toISOString(),
         };
 
@@ -161,6 +170,9 @@ export class DictionaryMirror {
         version: this.snapshot.version,
         syncedAt: this.snapshot.syncedAt,
         adverbMap: this.snapshot.adverbMap,
+        verbInflectionMap: this.snapshot.verbInflectionMap,
+        nounInflectionMap: this.snapshot.nounInflectionMap,
+        adjInflectionMap: this.snapshot.adjInflectionMap,
       };
     }
 

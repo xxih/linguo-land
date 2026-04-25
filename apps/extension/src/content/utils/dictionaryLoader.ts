@@ -5,6 +5,12 @@ export interface DictionaryLoadResult {
   ok: boolean;
   /** 后端下发的副词→形容词映射，用于 textProcessor 不规则变形还原 */
   adverbMap?: Record<string, string>;
+  /** 动词不规则变形 map（broken→break 等），ADR 0017 */
+  verbInflectionMap?: Record<string, string>;
+  /** 名词不规则复数 map（children→child 等），ADR 0017 */
+  nounInflectionMap?: Record<string, string>;
+  /** 形容词不规则比较级/最高级 map（better→good 等），ADR 0017 */
+  adjInflectionMap?: Record<string, string>;
   error?: string;
 }
 
@@ -162,6 +168,9 @@ export class DictionaryLoader {
 
     this.dictionarySet = new Set(result.words.map((word) => word.toLowerCase()));
     const adverbMap = result.adverbMap;
+    const verbInflectionMap = result.verbInflectionMap;
+    const nounInflectionMap = result.nounInflectionMap;
+    const adjInflectionMap = result.adjInflectionMap;
     await this.loadIgnoredWords();
 
     const endTime = performance.now();
@@ -172,9 +181,12 @@ export class DictionaryLoader {
       version: result.version,
       syncedAt: result.syncedAt,
       adverbMapSize: adverbMap ? Object.keys(adverbMap).length : 0,
+      verbInflectionSize: verbInflectionMap ? Object.keys(verbInflectionMap).length : 0,
+      nounInflectionSize: nounInflectionMap ? Object.keys(nounInflectionMap).length : 0,
+      adjInflectionSize: adjInflectionMap ? Object.keys(adjInflectionMap).length : 0,
     });
 
-    return { ok: true, adverbMap };
+    return { ok: true, adverbMap, verbInflectionMap, nounInflectionMap, adjInflectionMap };
   }
 
   /**
@@ -273,6 +285,15 @@ export class DictionaryLoader {
    */
   isDictionaryLoaded(): boolean {
     return this.dictionarySet !== null;
+  }
+
+  /**
+   * 暴露内部白名单 Set 给 textProcessor 做后缀剥除规则的候选验证（ADR 0017）。
+   * 注意：不应用 ignoredWords 过滤——忽略列表是用户偏好，应用在最终高亮判定，
+   * 而不是阻断词形还原本身（不然 `running` 在用户忽略 `run` 时就拿不到 `run` 候选了）。
+   */
+  getWhitelistSet(): Set<string> | null {
+    return this.dictionarySet;
   }
 
   /**
