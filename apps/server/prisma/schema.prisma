@@ -27,6 +27,10 @@ model User {
 
   // 关联到用户状态
   familyStatuses   UserFamilyStatus[]
+  // 用户上传的阅读材料
+  documents        Document[]
+  // 用户的阅读进度
+  readingProgress  ReadingProgress[]
 
   @@map("users")
 }
@@ -141,4 +145,61 @@ model Sense {
   definitionEntryId  Int
 
   @@map("senses")
+}
+
+// ------------------- 阅读材料模型 -------------------
+
+// 阅读文档：用户上传的 TXT/EPUB，或系统预置（ownerId 为 null）
+model Document {
+  id          Int               @id @default(autoincrement())
+  ownerId     Int?              // null 表示系统预置，所有用户可见
+  owner       User?             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  title       String
+  author      String?
+  fileFormat  DocumentFormat
+  filePath    String            // 服务器本地相对路径，如 "uploads/documents/<uuid>.epub"
+  sizeBytes   Int
+  sourceLang  String            @default("en")
+
+  // EPUB 上传时抽出来的目录树，结构：[{ label, href, cfi? }]
+  // TXT 暂不填
+  toc         Json?             @db.JsonB
+
+  progress    ReadingProgress[]
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([ownerId])
+  @@map("documents")
+}
+
+// 阅读进度：每用户 × 每文档唯一一条
+model ReadingProgress {
+  id         Int      @id @default(autoincrement())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId Int
+
+  // EPUB: epub.js CFI 字符串
+  // TXT:  "<chapterIndex>:<charOffset>"
+  locator    String
+
+  // 0..1，用于书架进度条显示
+  percent    Float?
+
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, documentId])
+  @@index([userId])
+  @@map("reading_progress")
+}
+
+enum DocumentFormat {
+  TXT
+  EPUB
 }
