@@ -1,40 +1,33 @@
 /**
- * 词族重建脚本（ADR 0018）
+ * 词族重建脚本（ADR 0018，v2 算法）
  *
- * 旧数据问题：apps/extension/public/word_groups_final_refined—25.json
- * 35K 词族里 31K 是孤立单词（words.length === 1）；inflection 覆盖几乎
- * 没有；包含明显噪声（go ← antigone、get ← ingot、come ← income/incoming
- * 这种纯字面包含的"compound"），并且 be 家族根本不存在。
+ * v1 用 expander 反向生成 + 全量白名单声明，结果 3648 真实词被误吞
+ * （bed 进 be、seed 进 see、drawer 进 draw、need 进 nee……），噪声 96%。
  *
- * 重建策略：
- *   - 源 = apps/server/src/data/dictionary-whitelist.json（43K 词，已有
- *     curated baseline）。
- *   - 用 lemma-expander 反向识别 base form：如果一个词出现在另一个词的
- *     expandLemmaToSurfaceForms 输出里，它就是 inflected form，不当 base。
- *   - 每个 base form → 一个 family，words[] = expander(base)（含 base 自身）。
- *   - 仅做"inflectional grouping"，不做 derivational（即不把 breakable/
- *     breakage 跟 break 强行捏到一起）—— 各派生词自有家族，更可预测。
+ * v2 思路：family 构建只信任 wink 不规则映射（这是金标），规则形态仅当
+ * 形态本身不在白名单时才补——如果一个生成形态已经是白名单里的独立词
+ * （bed / drawer / need），就让它形成自己的 family，不被另一个短词吞掉。
  *
- * 输出：apps/server/src/data/word-families.json
- *   形态：{ rootWord: [forms...] }，与旧 seed JSON 兼容，便于 seed.ts 复用。
- *
- * 验证：脚本末尾打印 stats + 关键 fixture（woman/go/break/big 等）的展开
- * 结果。还会和 ../../extension/src/content/utils/lemmaFixtures.json 交叉
- * 验证—— fixture 里每个 expectedLemma 应该都能找到对应 family root。
+ * 算法：
+ *   1. 把 wink verb/noun/adj 三表合并：inflectionToBase[form] = base
+ *   2. 对白名单每个词 w：
+ *      - 若 w 在 inflectionToBase 里：跳过，由对应 base 收
+ *      - 否则 w 是自己的 base
+ *   3. 每个 base 的 family.words[] =
+ *        {base} ∪
+ *        wink 反向映射给的所有 form ∪
+ *        规则形态生成器输出且**不在白名单**的形态
+ *   4. wink 里出现但 base 不在白名单的（比如 've → 'have'），也要建 family
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { expandLemmaToSurfaceForms } from '../src/lemma-expander';
 
 const ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'src/data');
 const WHITELIST_PATH = path.join(DATA_DIR, 'dictionary-whitelist.json');
 const OUT_PATH = path.join(DATA_DIR, 'word-families.json');
-const FIXTURE_PATH = path.resolve(
-  ROOT,
-  '../extension/src/content/utils/lemmaFixtures.json',
-);
+const FIXTURE_PATH = path.resolve(ROOT, '../extension/src/content/utils/lemmaFixtures.json');
 
 const whitelist: string[] = JSON.parse(fs.readFileSync(WHITELIST_PATH, 'utf-8'));
 const whitelistSet = new Set(whitelist.map((w) => w.toLowerCase()));
@@ -49,95 +42,180 @@ const adjMap: Record<string, string> = JSON.parse(
   fs.readFileSync(path.join(DATA_DIR, 'adj-inflection-map.json'), 'utf-8'),
 );
 
-const winkBaseOf = (form: string): string | undefined =>
-  verbMap[form] ?? nounMap[form] ?? adjMap[form];
-
-/**
- * 过滤 expander 的输出，只做"wink 冲突消除"——规则形态几乎都常见，宁多
- * 勿少（用户文章里出现的复数 / 三单 / 进行时几乎都用规则形态）。
- *
- * 跳过条件：wink 不规则映射明确把这个形态指给了另一个 base（典型如 best
- * 在 adjMap 是 best → good，那 be 家族不能抢）。
- *
- * 不再用白名单卡——白名单基本只收 base form，breaks / having / cars 这种
- * 最常见的规则变形不在里面，过滤掉损失太大。规则形态里偶尔有 'womaned'
- * 这种冷门生成，但不会出现在用户文章里，不影响识别准确性。
- */
-function filterFamilyForms(base: string, raw: Set<string>): string[] {
-  const out = new Set<string>([base]);
-  for (const f of raw) {
-    if (f === base) continue;
-    const otherBase = winkBaseOf(f);
-    if (otherBase && otherBase !== base) continue;
-    out.add(f);
-  }
-  return [...out].sort();
+// === 1. 合并 wink 三表 ===
+const inflectionToBase = new Map<string, string>();
+for (const [form, base] of Object.entries({ ...verbMap, ...nounMap, ...adjMap })) {
+  inflectionToBase.set(form, base);
+}
+const baseToWinkForms = new Map<string, Set<string>>();
+for (const [form, base] of inflectionToBase) {
+  if (!baseToWinkForms.has(base)) baseToWinkForms.set(base, new Set());
+  baseToWinkForms.get(base)!.add(form);
 }
 
-console.log(`[rebuild] 读到 ${whitelist.length} 词白名单`);
+console.log(`[v2] wink 不规则覆盖: ${inflectionToBase.size} forms → ${baseToWinkForms.size} bases`);
 
-// 1. 反向构建：对每个白名单词跑 expander，记下哪些 form 由哪些 base 派生
-//    formToBases[form] = Set<base>，base 是 expansion 包含 form 的某个白名单词
-const formToBases = new Map<string, Set<string>>();
-for (const candidate of whitelist) {
-  const c = candidate.toLowerCase();
-  const forms = expandLemmaToSurfaceForms(c);
-  for (const f of forms) {
-    if (f === c) continue;
-    if (!formToBases.has(f)) formToBases.set(f, new Set());
-    formToBases.get(f)!.add(c);
-  }
+// === 2. 规则形态生成器（小写版，仅生成核心 inflection，不再做 derivation） ===
+const VOWELS = new Set(['a', 'e', 'i', 'o', 'u']);
+const isVowel = (c: string) => VOWELS.has(c);
+const isCvc = (w: string): boolean => {
+  if (w.length < 3) return false;
+  const a = w[w.length - 3];
+  const b = w[w.length - 2];
+  const c = w[w.length - 1];
+  if (!a || isVowel(a)) return false;
+  if (!isVowel(b)) return false;
+  if (isVowel(c)) return false;
+  if ('wxy'.includes(c)) return false;
+  return true;
+};
+const endsWithSibilant = (w: string) =>
+  ['s', 'x', 'z', 'sh', 'ch'].some((s) => w.endsWith(s));
+
+interface RegularInflections {
+  /** 屈折性强：-s / -es / -ies / -ing。always 加入 family，不管在不在白名单 */
+  inflectional: Set<string>;
+  /** 过去式：-ed / -ied / -d。若 base 已有 wink 不规则过去式则跳过整组（避免 bed 进 be、seed 进 see、knowed 进 know） */
+  pastTense: Set<string>;
+  /** 形容词比较级 / 最高级：-er / -est。在白名单里的跳过（避免 runner 进 run、drawer 进 draw）；不在白名单的安全收 */
+  comparatives: Set<string>;
 }
 
-// 2. 识别 base form：白名单词中没有任何其他白名单词把它当 inflected form
-const baseForms: string[] = [];
-const inflectionToBase = new Map<string, string>(); // form → 选定的 base
+function generateRegularInflections(base: string): RegularInflections {
+  const inflectional = new Set<string>();
+  const pastTense = new Set<string>();
+  const comparatives = new Set<string>();
+  if (base.length < 2) return { inflectional, pastTense, comparatives };
 
+  // 复数 / 三单 -s / -es / -ies
+  if (base.endsWith('y') && base.length >= 2 && !isVowel(base[base.length - 2])) {
+    inflectional.add(base.slice(0, -1) + 'ies');
+  } else if (endsWithSibilant(base)) {
+    inflectional.add(base + 'es');
+  } else if (base.endsWith('o') && base.length >= 2 && !isVowel(base[base.length - 2])) {
+    inflectional.add(base + 'es');
+    inflectional.add(base + 's');
+  } else {
+    inflectional.add(base + 's');
+  }
+
+  // -ing 进行时
+  if (base.endsWith('e') && base.length > 2 && base[base.length - 2] !== 'e') {
+    inflectional.add(base.slice(0, -1) + 'ing');
+    inflectional.add(base + 'ing');
+  } else if (base.endsWith('ie')) {
+    inflectional.add(base.slice(0, -2) + 'ying');
+    inflectional.add(base + 'ing');
+  } else if (isCvc(base)) {
+    inflectional.add(base + base[base.length - 1] + 'ing');
+    inflectional.add(base + 'ing');
+  } else {
+    inflectional.add(base + 'ing');
+  }
+
+  // -ed / -ied / -d 过去式（受 wink 是否覆盖控制）
+  if (base.endsWith('e')) {
+    pastTense.add(base + 'd');
+  } else if (base.endsWith('y') && base.length >= 2 && !isVowel(base[base.length - 2])) {
+    pastTense.add(base.slice(0, -1) + 'ied');
+  } else if (isCvc(base)) {
+    pastTense.add(base + base[base.length - 1] + 'ed');
+    pastTense.add(base + 'ed');
+  } else {
+    pastTense.add(base + 'ed');
+  }
+
+  // -er / -est 比较级最高级（仅短词候选）
+  if (base.length <= 6 && base.length >= 3) {
+    if (base.endsWith('e')) {
+      comparatives.add(base + 'r');
+      comparatives.add(base + 'st');
+    } else if (base.endsWith('y') && base.length >= 2 && !isVowel(base[base.length - 2])) {
+      comparatives.add(base.slice(0, -1) + 'ier');
+      comparatives.add(base.slice(0, -1) + 'iest');
+    } else if (isCvc(base)) {
+      comparatives.add(base + base[base.length - 1] + 'er');
+      comparatives.add(base + base[base.length - 1] + 'est');
+    } else {
+      comparatives.add(base + 'er');
+      comparatives.add(base + 'est');
+    }
+  }
+
+  return { inflectional, pastTense, comparatives };
+}
+
+// === 3. 构建 family ===
+const families: Record<string, string[]> = {};
+
+function buildFamily(base: string): void {
+  const forms = new Set<string>([base]);
+  // wink 反向映射给的不规则形态（金标）
+  for (const f of baseToWinkForms.get(base) ?? []) forms.add(f);
+
+  const reg = generateRegularInflections(base);
+  // 屈折性强（-s/-es/-ies/-ing）：总是加入
+  for (const f of reg.inflectional) forms.add(f);
+  // 过去式（-ed/-d/-ied）：仅当 wink 没给本 base 提供任何不规则形态时才生成
+  // （避免 bed 进 be、seed 进 see、knowed 进 know 等"规则化错误"）
+  if (!baseToWinkForms.has(base)) {
+    for (const f of reg.pastTense) forms.add(f);
+  }
+  // 比较级（-er/-est）：仅当形态不在白名单时（在白名单的让 runner/drawer 自成 family）
+  for (const f of reg.comparatives) {
+    if (!whitelistSet.has(f)) forms.add(f);
+  }
+
+  families[base] = [...forms].sort();
+}
+
+// 3a. 白名单里非 wink-form 的词都是自己的 base
+let baseCount = 0;
 for (const word of whitelist) {
   const w = word.toLowerCase();
-  const claimers = formToBases.get(w);
-  if (!claimers || claimers.size === 0) {
-    baseForms.push(w);
-    continue;
-  }
-  // 被其他词声明为 inflected form。挑最短的当 base（启发式：base 通常更短）；
-  // 长度相同时按字典序——保证可复现
-  const sorted = [...claimers].sort((a, b) => a.length - b.length || a.localeCompare(b));
-  inflectionToBase.set(w, sorted[0]);
+  if (inflectionToBase.has(w)) continue; // 这是某 base 的 form，不当 base
+  baseCount++;
+  buildFamily(w);
 }
 
-console.log(`[rebuild] base forms: ${baseForms.length}, inflected forms claimed: ${inflectionToBase.size}`);
-
-// 3. 给每个 base form 构建 family。先用 expander 生成候选，再用 filterFamilyForms
-// 过滤掉伪生成形态（womaned 等）。最后并入白名单里被它认领的 inflection。
-const families: Record<string, string[]> = {};
-for (const base of baseForms) {
-  const raw = expandLemmaToSurfaceForms(base);
-  for (const [form, b] of inflectionToBase.entries()) {
-    if (b === base) raw.add(form);
-  }
-  families[base] = filterFamilyForms(base, raw);
+// 3b. wink 里 base 不在白名单的（如 'have' 不在白名单的极端 case），也要建 family
+let synthBaseCount = 0;
+for (const base of baseToWinkForms.keys()) {
+  if (families[base]) continue;
+  synthBaseCount++;
+  buildFamily(base);
 }
 
-console.log(`[rebuild] 生成 ${Object.keys(families).length} 个 family`);
+console.log(
+  `[v2] 生成 ${Object.keys(families).length} family（白名单 base ${baseCount}，wink 补 ${synthBaseCount}）`,
+);
 
-// 4. 关键 case 验证
-const KEY_CHECKS: Array<{ root: string; mustInclude: string[] }> = [
-  { root: 'woman', mustInclude: ['woman', 'women'] },
+// === 4. 关键 case 验证 ===
+const KEY_CHECKS: Array<{ root: string; mustInclude: string[]; mustNotInclude?: string[] }> = [
+  { root: 'woman', mustInclude: ['woman', 'women'], mustNotInclude: ['womaned'] },
   { root: 'go', mustInclude: ['go', 'goes', 'going', 'gone', 'went'] },
   { root: 'break', mustInclude: ['break', 'breaks', 'broke', 'broken', 'breaking'] },
   { root: 'big', mustInclude: ['big', 'bigger', 'biggest'] },
   { root: 'good', mustInclude: ['good', 'better', 'best'] },
-  { root: 'be', mustInclude: ['be', 'is', 'are', 'was', 'were', 'been', 'being'] },
+  {
+    root: 'be',
+    mustInclude: ['be', 'is', 'are', 'was', 'were', 'been', 'being'],
+    mustNotInclude: ['bed'],
+  },
   { root: 'have', mustInclude: ['have', 'has', 'had', 'having'] },
   { root: 'do', mustInclude: ['do', 'does', 'did', 'doing', 'done'] },
   { root: 'child', mustInclude: ['child', 'children'] },
   { root: 'mouse', mustInclude: ['mouse', 'mice'] },
+  { root: 'see', mustInclude: ['see', 'sees', 'saw', 'seen', 'seeing'], mustNotInclude: ['seed'] },
+  { root: 'draw', mustInclude: ['draw', 'draws', 'drew', 'drawn', 'drawing'], mustNotInclude: ['drawer'] },
+  { root: 'need', mustInclude: ['need', 'needs', 'needed', 'needing'] },
+  { root: 'bring', mustInclude: ['bring', 'brings', 'brought', 'bringing'] },
+  { root: 'river', mustInclude: ['river', 'rivers'] },
 ];
 
 let keyOk = true;
-console.log('\n[rebuild] 关键 case 验证:');
-for (const { root, mustInclude } of KEY_CHECKS) {
+console.log('\n[v2] 关键 case 验证:');
+for (const { root, mustInclude, mustNotInclude } of KEY_CHECKS) {
   const fam = families[root];
   if (!fam) {
     console.log(`  ✗ ${root}: family 不存在`);
@@ -145,54 +223,50 @@ for (const { root, mustInclude } of KEY_CHECKS) {
     continue;
   }
   const missing = mustInclude.filter((f) => !fam.includes(f));
-  if (missing.length > 0) {
-    console.log(`  ✗ ${root}: 缺 ${missing.join(', ')} (有 ${fam.join(', ')})`);
+  const stolen = (mustNotInclude ?? []).filter((f) => fam.includes(f));
+  if (missing.length > 0 || stolen.length > 0) {
+    console.log(
+      `  ✗ ${root}: 缺[${missing.join(',')}] 误吞[${stolen.join(',')}] (${fam.length} 形态)`,
+    );
     keyOk = false;
   } else {
-    console.log(`  ✓ ${root}: ${fam.length} 形态`);
+    console.log(`  ✓ ${root}: ${fam.length} 形态 [${fam.join(', ')}]`);
   }
 }
 
-// 5. 与 lemma fixture 交叉验证：fixture 每个 expectedLemma 应该是某个 family root
+// === 5. fixture 交叉验证 ===
 if (fs.existsSync(FIXTURE_PATH)) {
   const fixture: Array<{ word: string; expectedLemmas: string[] }> = JSON.parse(
     fs.readFileSync(FIXTURE_PATH, 'utf-8'),
   );
   let fxOk = 0;
-  let fxMiss = 0;
-  const missExamples: string[] = [];
+  const fxMissExamples: string[] = [];
+  const wordToFamily = new Map<string, string>();
+  for (const [b, ws] of Object.entries(families)) for (const w of ws) wordToFamily.set(w, b);
   for (const { word, expectedLemmas } of fixture) {
-    // 任一 expectedLemma 是 family root，或 word 在某 family 里
-    const inFamily = [...expectedLemmas, word].some((l) => {
-      if (families[l]) return true;
-      return inflectionToBase.has(l) && families[inflectionToBase.get(l)!];
-    });
-    if (inFamily) fxOk++;
-    else {
-      fxMiss++;
-      if (missExamples.length < 10) missExamples.push(`${word} → ${expectedLemmas.join(',')}`);
-    }
+    const candidates = [word, ...expectedLemmas];
+    const hit = candidates.some((c) => wordToFamily.has(c) || families[c]);
+    if (hit) fxOk++;
+    else if (fxMissExamples.length < 6)
+      fxMissExamples.push(`${word} → ${expectedLemmas.join(',')}`);
   }
-  console.log(`\n[rebuild] fixture 交叉: ${fxOk}/${fxOk + fxMiss} 命中 family`);
-  if (fxMiss > 0) {
-    console.log('  miss 示例:', missExamples.slice(0, 10).join(' | '));
-  }
+  console.log(`\n[v2] fixture 交叉: ${fxOk}/${fixture.length}`);
+  if (fxMissExamples.length > 0) console.log(`  miss 示例: ${fxMissExamples.join(' | ')}`);
 }
 
-// 6. family 体积分布
-const sizeBuckets = new Map<number, number>();
-for (const arr of Object.values(families)) {
-  const sz = arr.length;
-  sizeBuckets.set(sz, (sizeBuckets.get(sz) || 0) + 1);
-}
-const sortedSizes = [...sizeBuckets.entries()].sort((a, b) => a[0] - b[0]);
-console.log('\n[rebuild] family 体积分布 (top 10):');
-console.table(sortedSizes.slice(0, 10).map(([sz, n]) => ({ words: sz, families: n })));
+// === 6. 体积 ===
+const sizes = Object.values(families).map((w) => w.length);
+sizes.sort((a, b) => a - b);
+console.log(
+  `\n[v2] 体积: median=${sizes[Math.floor(sizes.length / 2)]}, p75=${sizes[Math.floor(sizes.length * 0.75)]}, p99=${sizes[Math.floor(sizes.length * 0.99)]}, max=${sizes[sizes.length - 1]}`,
+);
+console.log(`  size==1 family: ${sizes.filter((s) => s === 1).length}`);
 
-// 7. 写文件（紧凑 JSON，减小仓库体积）
+// === 7. 写文件 ===
 if (!keyOk) {
-  console.error('\n[rebuild] 关键 case 验证未全过，请人工 review 后再决定是否落盘');
+  console.error('\n[v2] 关键 case 未全过！');
+  process.exit(1);
 }
 fs.writeFileSync(OUT_PATH, JSON.stringify(families) + '\n');
-const fileSize = fs.statSync(OUT_PATH).size;
-console.log(`\n[rebuild] 已写入 ${OUT_PATH} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
+const sz = fs.statSync(OUT_PATH).size;
+console.log(`\n[v2] ✓ 已写入 ${OUT_PATH} (${(sz / 1024 / 1024).toFixed(2)} MB)`);
